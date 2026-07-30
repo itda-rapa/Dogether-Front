@@ -1,0 +1,303 @@
+import { useEffect, useRef, useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import { DotsThree, Prohibit, Flag, X } from '@phosphor-icons/react'
+import { createBlock, createReport } from '@/features/moderation/api'
+import { REPORT_REASONS, type ReportReason } from '@/features/moderation/types'
+import { inputClass } from '@/components/ui/input-class'
+import { Button } from '@/components/ui/Button'
+import { ApiError } from '@/lib/api'
+import { cn } from '@/lib/cn'
+
+type Props = {
+  /**
+   * 신고 대상 방. M1 의 신고는 **DIRECT 방 단위로만** 접수되므로
+   * 채팅방 화면에서만 넘긴다. 없으면 신고 항목이 뜨지 않는다.
+   */
+  roomId?: number
+  /** 차단 대상 펫. 없으면 차단 항목을 숨긴다. */
+  targetPetId?: number
+  targetName: string
+}
+
+/**
+ * 차단·신고 메뉴.
+ *
+ * 차단은 되돌릴 수 없고(M1 에 해제 API 가 없다) 신고는 방 단위라 대상이 서로
+ * 다르다. 그래서 둘을 각각 독립적으로 노출한다.
+ */
+export function ModerationMenu({ roomId, targetPetId, targetName }: Props) {
+  const [open, setOpen] = useState(false)
+  const [sheet, setSheet] = useState<'report' | 'block' | null>(null)
+  const ref = useRef<HTMLDivElement | null>(null)
+
+  // 바깥을 누르면 닫는다.
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        aria-label={`${targetName} 메뉴`}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="grid size-11 shrink-0 place-items-center rounded-lg transition-colors hover:bg-primary-subtle"
+      >
+        <DotsThree size={22} weight="bold" />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-12 z-30 w-44 overflow-hidden rounded-xl border border-border bg-surface shadow-md"
+        >
+          {/* 신고는 방 단위라 채팅방에서만 뜬다. */}
+          {roomId != null && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                setSheet('report')
+              }}
+              className="flex min-h-11 w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-primary-subtle"
+            >
+              <Flag size={18} />
+              신고하기
+            </button>
+          )}
+
+          {targetPetId != null && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                setSheet('block')
+              }}
+              className="flex min-h-11 w-full items-center gap-2 px-4 py-3 text-left text-destructive transition-colors first:border-t-0 hover:bg-primary-subtle [&:not(:first-child)]:border-t [&:not(:first-child)]:border-border"
+            >
+              <Prohibit size={18} />
+              차단하기
+            </button>
+          )}
+        </div>
+      )}
+
+      {sheet === 'report' && roomId != null && (
+        <ReportSheet
+          roomId={roomId}
+          targetName={targetName}
+          onClose={() => setSheet(null)}
+        />
+      )}
+
+      {sheet === 'block' && targetPetId != null && (
+        <BlockSheet
+          targetPetId={targetPetId}
+          targetName={targetName}
+          onClose={() => setSheet(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+function Sheet({
+  title,
+  onClose,
+  children,
+}: {
+  title: string
+  onClose: () => void
+  children: React.ReactNode
+}) {
+  // 뒤로가기·ESC 로 닫히게 한다.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center sm:items-center">
+      {/* 배경 흐림은 "눌러서 닫힘"을 알리는 용도다. 장식이 아니다. */}
+      <button
+        type="button"
+        aria-label="닫기"
+        onClick={onClose}
+        className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative z-10 w-full max-w-md rounded-t-2xl border border-border bg-surface p-5 sm:rounded-2xl"
+      >
+        <div className="mb-4 flex items-center gap-3">
+          <h2 className="flex-1 text-lg font-bold">{title}</h2>
+          <button
+            type="button"
+            aria-label="닫기"
+            onClick={onClose}
+            className="grid size-11 place-items-center rounded-lg transition-colors hover:bg-primary-subtle"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function ReportSheet({
+  roomId,
+  targetName,
+  onClose,
+}: {
+  roomId: number
+  targetName: string
+  onClose: () => void
+}) {
+  const [reason, setReason] = useState<ReportReason | ''>('')
+  const [detail, setDetail] = useState('')
+
+  const submit = useMutation({
+    mutationFn: () =>
+      createReport({
+        roomId,
+        reasonCode: reason as ReportReason,
+        detail: detail.trim() || undefined,
+      }),
+    onSuccess: onClose,
+  })
+
+  return (
+    <Sheet title={`${targetName} 신고`} onClose={onClose}>
+      {/* 신고 단위가 대화방이라는 걸 분명히 알린다. 메시지 하나만 신고되는 게 아니다. */}
+      <p className="mb-3 text-[14px] text-muted-foreground">
+        이 대화방 전체가 관리자에게 전달됩니다.
+      </p>
+
+      <fieldset className="flex flex-col gap-2">
+        <legend className="sr-only">신고 사유</legend>
+        {REPORT_REASONS.map((r) => (
+          <label
+            key={r.value}
+            className={cn(
+              'flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-colors',
+              reason === r.value
+                ? 'border-primary bg-primary-subtle'
+                : 'border-border hover:bg-primary-subtle',
+            )}
+          >
+            <input
+              type="radio"
+              name="reason"
+              value={r.value}
+              checked={reason === r.value}
+              onChange={() => setReason(r.value)}
+              className="size-4 accent-[var(--dg-primary)]"
+            />
+            {r.label}
+          </label>
+        ))}
+      </fieldset>
+
+      <label htmlFor="report-detail" className="mt-4 block font-medium">
+        상세 내용 (선택)
+      </label>
+      <textarea
+        id="report-detail"
+        rows={3}
+        maxLength={500}
+        value={detail}
+        onChange={(e) => setDetail(e.target.value)}
+        className={cn(inputClass(false), 'mt-1.5 resize-y py-3')}
+      />
+
+      {submit.isError && (
+        <p role="alert" className="mt-3 text-[14px] text-destructive">
+          {submit.error instanceof ApiError && submit.error.status === 404
+            ? '신고 기능이 아직 준비되지 않았습니다. (POST /reports 미구현)'
+            : '신고를 접수하지 못했습니다. 잠시 후 다시 시도해 주세요.'}
+        </p>
+      )}
+
+      <div className="mt-5 flex gap-3">
+        <Button
+          onClick={() => submit.mutate()}
+          disabled={reason === '' || submit.isPending}
+        >
+          {submit.isPending ? '접수 중…' : '신고'}
+        </Button>
+        <Button variant="secondary" onClick={onClose}>
+          취소
+        </Button>
+      </div>
+    </Sheet>
+  )
+}
+
+function BlockSheet({
+  targetPetId,
+  targetName,
+  onClose,
+}: {
+  targetPetId: number
+  targetName: string
+  onClose: () => void
+}) {
+  const submit = useMutation({
+    mutationFn: () => createBlock(targetPetId),
+    onSuccess: onClose,
+  })
+
+  return (
+    <Sheet title={`${targetName} 차단`} onClose={onClose}>
+      <p className="leading-relaxed">
+        차단하면 서로의 게시물과 프로필이 보이지 않고, 대화도 할 수 없습니다.
+      </p>
+      <ul className="mt-3 flex list-disc flex-col gap-1 pl-5 text-[14px] text-muted-foreground">
+        <li>이미 맺은 친구 관계가 삭제됩니다</li>
+        <li>주고받은 친구 요청이 모두 취소됩니다</li>
+        <li>차단은 상대 계정 전체에 적용됩니다</li>
+      </ul>
+
+      {/* 계약에 해제 API 가 없다. 사용자에게 미리 알려야 한다. */}
+      <p className="mt-3 text-[14px] font-medium text-destructive">
+        현재 차단은 앱에서 해제할 수 없습니다.
+      </p>
+
+      {submit.isError && (
+        <p role="alert" className="mt-3 text-[14px] text-destructive">
+          {submit.error instanceof ApiError && submit.error.status === 404
+            ? '차단 기능이 아직 준비되지 않았습니다. (POST /me/blocks 미구현)'
+            : '차단하지 못했습니다. 잠시 후 다시 시도해 주세요.'}
+        </p>
+      )}
+
+      <div className="mt-5 flex gap-3">
+        <Button
+          onClick={() => submit.mutate()}
+          disabled={submit.isPending}
+          className="bg-destructive hover:bg-destructive"
+        >
+          {submit.isPending ? '차단 중…' : '차단하기'}
+        </Button>
+        <Button variant="secondary" onClick={onClose}>
+          취소
+        </Button>
+      </div>
+    </Sheet>
+  )
+}

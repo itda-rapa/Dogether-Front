@@ -1,0 +1,97 @@
+import { useState } from 'react'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Field } from '@/components/ui/Field'
+import { inputClass } from '@/components/ui/input-class'
+import { Button } from '@/components/ui/Button'
+import { AuthLayout } from '@/components/AuthLayout'
+import { useAuth } from '@/features/auth/auth-context'
+import { toAuthMessage } from '@/features/auth/error-message'
+
+const schema = z.object({
+  email: z.email('이메일 형식이 올바르지 않습니다.'),
+  password: z.string().min(1, '비밀번호를 입력해 주세요.'),
+})
+
+type FormValues = z.input<typeof schema>
+
+export function LoginPage() {
+  const { signIn, hasSession, loading } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  const from =
+    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/'
+
+  const { register, handleSubmit, formState } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    mode: 'onTouched',
+    defaultValues: { email: '', password: '' },
+  })
+
+  const onSubmit = handleSubmit(async (values) => {
+    setSubmitError(null)
+    try {
+      await signIn(values.email, values.password)
+      navigate(from, { replace: true })
+    } catch (e) {
+      setSubmitError(toAuthMessage(e))
+    }
+  })
+
+  if (!loading && hasSession) return <Navigate to="/" replace />
+
+  return (
+    <AuthLayout title="로그인" subtitle="Dogether에 오신 걸 환영합니다">
+      <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
+        <Field label="이메일" error={formState.errors.email?.message}>
+          {({ id, describedBy, invalid }) => (
+            <input
+              id={id}
+              type="email"
+              autoComplete="email"
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              className={inputClass(invalid)}
+              {...register('email')}
+            />
+          )}
+        </Field>
+
+        <Field label="비밀번호" error={formState.errors.password?.message}>
+          {({ id, describedBy, invalid }) => (
+            <input
+              id={id}
+              type="password"
+              autoComplete="current-password"
+              aria-describedby={describedBy}
+              aria-invalid={invalid}
+              className={inputClass(invalid)}
+              {...register('password')}
+            />
+          )}
+        </Field>
+
+        {submitError && (
+          <p role="alert" className="text-[14px] text-destructive">
+            {submitError}
+          </p>
+        )}
+
+        <Button type="submit" disabled={formState.isSubmitting}>
+          {formState.isSubmitting ? '로그인 중…' : '로그인'}
+        </Button>
+      </form>
+
+      <p className="mt-6 text-center text-[14px] text-muted-foreground">
+        계정이 없으신가요?{' '}
+        <Link to="/signup" className="font-semibold text-primary">
+          회원가입
+        </Link>
+      </p>
+    </AuthLayout>
+  )
+}

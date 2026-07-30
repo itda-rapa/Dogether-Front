@@ -1,0 +1,131 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
+@import 'tailwindcss';
+
+/* 다크 모드는 <html class="dark"> 로 제어한다 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------
+   시맨틱 토큰
+   design-system/dogether/MASTER.md 가 정본이다.
+   컴포넌트에서 raw hex 를 쓰지 말고 반드시 이 변수만 참조할 것.
+   --------------------------------------------------------------------------- */
+@theme inline {
+  --font-sans: var(--dg-font-sans);
+
+  --color-background: var(--dg-background);
+  --color-surface: var(--dg-surface);
+  --color-muted: var(--dg-muted);
+  --color-foreground: var(--dg-foreground);
+  --color-muted-foreground: var(--dg-muted-foreground);
+  --color-border: var(--dg-border);
+
+  --color-primary: var(--dg-primary);
+  --color-primary-hover: var(--dg-primary-hover);
+  --color-primary-subtle: var(--dg-primary-subtle);
+  --color-on-primary: var(--dg-on-primary);
+
+  --color-like: var(--dg-like);
+  --color-destructive: var(--dg-destructive);
+  --color-ring: var(--dg-ring);
+}
+
+:root {
+  --dg-font-sans: 'Pretendard Variable', Pretendard, -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+
+  /* LIGHT — 전 항목 WCAG AA 검증 완료 */
+  /*
+    배경은 웜샌드. 처음에 #FFFBF5 로 잡았더니 흰 카드와 명도차가 1.03:1 밖에
+    안 나와서 카드가 카드로 안 읽혔다. 지금은 1.15:1 로 분리된다.
+  */
+  --dg-background: #f3efe7;
+  --dg-surface: #ffffff;
+  --dg-muted: #e7e1d6; /* 이미지/영상 자리표시자. 브랜드색으로 채우지 않는다 */
+  --dg-foreground: #0f172a; /* 15.6:1 */
+  --dg-muted-foreground: #64748b; /*  4.62:1 */
+  --dg-border: #e2dcd0;
+
+  --dg-primary: #0f766e; /* 흰 글씨 5.47:1 / 배경 위 텍스트 5.31:1 — 양쪽 통과 */
+  --dg-primary-hover: #115e59;
+  --dg-primary-subtle: #ccfbf1;
+  --dg-on-primary: #ffffff;
+
+  --dg-like: #ff7f50; /* 좋아요 전용 기능색. 텍스트 색으로 쓰면 2.42:1 — 금지 */
+  --dg-destructive: #dc2626; /*  4.53:1 */
+  --dg-ring: #0f766e;
+
+  /* 다크에서는 그림자 대신 보더로 elevation 을 표현하므로 라이트에만 값을 둔다 */
+  --dg-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --dg-shadow-md: 0 4px 6px rgb(0 0 0 / 0.1);
+
+  color-scheme: light;
+}
+
+.dark {
+  /* DARK — 배경 대비 기준으로 재계산한 값. 라이트를 반전한 것이 아니다. */
+  --dg-background: #0f172a; /* 순수 검정 금지 — 영상 썸네일 경계가 과하게 튄다 */
+  --dg-surface: #192134; /* 배경과 1.11:1 뿐이라 보더가 필수 */
+  --dg-muted: #232c40; /* 자리표시자 */
+  --dg-foreground: #f8fafc; /* 17.1:1 */
+  --dg-muted-foreground: #94a3b8; /*  6.96:1 */
+  --dg-border: rgb(255 255 255 / 0.08);
+
+  --dg-primary: #2dd4bf; /*  9.59:1 */
+  --dg-primary-hover: #5eead4;
+  --dg-primary-subtle: rgb(45 212 191 / 0.14);
+  --dg-on-primary: #0f172a; /* 청록이 매우 밝아 흰 글씨는 안 읽힌다 */
+
+  --dg-like: #ff7f50; /*  7.14:1 — 라이트와 동일값 사용 가능 */
+  --dg-destructive: #ef4444; /*  4.75:1 */
+  --dg-ring: #2dd4bf;
+
+  --dg-shadow-sm: none;
+  --dg-shadow-md: none;
+
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--dg-background);
+    color: var(--dg-foreground);
+    font-family: var(--dg-font-sans);
+    font-size: 16px; /* 본문 16px 고정. 12px 미만 금지 */
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 포커스 링은 절대 제거하지 않는다 (접근성 우선순위 1) */
+  :focus-visible {
+    outline: 2px solid var(--dg-ring);
+    outline-offset: 2px;
+  }
+
+  /* 폼 컨트롤이 16px 미만이면 iOS Safari 가 포커스 시 화면을 자동 확대한다 */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  button {
+    cursor: pointer;
+  }
+}
+
+/* 모션은 의미 전달용으로만. 사용자가 꺼두면 전부 비활성화한다. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
