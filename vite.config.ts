@@ -16,7 +16,7 @@ export default defineConfig({
     // 백엔드: C:\work\dogether (Spring Boot, 기본 8080)
     proxy: {
       '/api': {
-        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8081',
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api/, ''),
         configure: (proxy) => {

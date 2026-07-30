@@ -12,12 +12,13 @@
  * AI 결과를 자동 확정하지 않는다. 저장은 사용자가 확정 버튼을 눌렀을 때만 한다.
  */
 
-export const CARD_TYPES = ['WALK', 'PLAY', 'OTHER'] as const
+export const CARD_TYPES = ['WALK', 'PLAY', 'HOSPITAL', 'OTHER'] as const
 export type CardType = (typeof CARD_TYPES)[number]
 
 export const CARD_TYPE_LABEL: Record<CardType, string> = {
   WALK: '산책',
   PLAY: '놀이',
+  HOSPITAL: '병원',
   OTHER: '기타',
 }
 
