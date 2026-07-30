@@ -121,7 +121,7 @@ export function ChatRoomPage() {
             <SealCheck
               size={17}
               weight="fill"
-              className="shrink-0 text-primary"
+              className="shrink-0 text-primary-strong"
               aria-label="인증된 펫"
             />
           )}
@@ -142,7 +142,7 @@ export function ChatRoomPage() {
         {canDraft ? (
           <Link
             to={`/chat/${roomId}/meeting/new`}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-[14px] font-medium text-primary transition-colors hover:bg-primary-subtle"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-[14px] font-medium text-primary-strong transition-colors hover:bg-primary-subtle"
           >
             <CalendarPlus size={17} weight="bold" />
             약속 잡기
@@ -245,7 +245,7 @@ function MessageRow({
 
     const inner = (
       <>
-        <p className="flex items-center gap-1.5 font-semibold text-primary">
+        <p className="flex items-center gap-1.5 font-semibold text-primary-strong">
           <CalendarPlus size={18} weight="bold" />약속 카드
         </p>
         <p className="mt-1 text-[14px] text-muted-foreground">

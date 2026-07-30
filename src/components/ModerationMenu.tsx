@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { DotsThree, Prohibit, Flag, X } from '@phosphor-icons/react'
 import { createBlock, createReport } from '@/features/moderation/api'
 import { REPORT_REASONS, type ReportReason } from '@/features/moderation/types'
@@ -227,9 +227,9 @@ function ReportSheet({
 
       {submit.isError && (
         <p role="alert" className="mt-3 text-[14px] text-destructive">
-          {submit.error instanceof ApiError && submit.error.status === 404
-            ? '신고 기능이 아직 준비되지 않았습니다. (POST /reports 미구현)'
-            : '신고를 접수하지 못했습니다. 잠시 후 다시 시도해 주세요.'}
+          {submit.error instanceof ApiError
+            ? submit.error.message
+            : '신고를 접수하지 못했습니다. 네트워크 연결을 확인해 주세요.'}
         </p>
       )}
 
@@ -257,9 +257,19 @@ function BlockSheet({
   targetName: string
   onClose: () => void
 }) {
+  const queryClient = useQueryClient()
+
   const submit = useMutation({
     mutationFn: () => createBlock(targetPetId),
-    onSuccess: onClose,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['me', 'blocks'] }),
+        queryClient.invalidateQueries({ queryKey: ['setlogs'] }),
+        queryClient.invalidateQueries({ queryKey: ['chat', 'rooms'] }),
+        queryClient.invalidateQueries({ queryKey: ['chat', 'room'] }),
+      ])
+      onClose()
+    },
   })
 
   return (
@@ -280,9 +290,9 @@ function BlockSheet({
 
       {submit.isError && (
         <p role="alert" className="mt-3 text-[14px] text-destructive">
-          {submit.error instanceof ApiError && submit.error.status === 404
-            ? '차단 기능이 아직 준비되지 않았습니다. (POST /me/blocks 미구현)'
-            : '차단하지 못했습니다. 잠시 후 다시 시도해 주세요.'}
+          {submit.error instanceof ApiError
+            ? submit.error.message
+            : '차단하지 못했습니다. 네트워크 연결을 확인해 주세요.'}
         </p>
       )}
 

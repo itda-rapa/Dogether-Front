@@ -282,7 +282,7 @@ function Notice({
           <button
             type="button"
             onClick={onRetry}
-            className="mt-3 inline-flex min-h-11 items-center gap-1.5 font-semibold text-primary"
+            className="mt-3 inline-flex min-h-11 items-center gap-1.5 font-semibold text-primary-strong"
           >
             <ArrowClockwise size={18} />
             다시 시도
@@ -295,7 +295,7 @@ function Notice({
 
 function AiBadge() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-primary-subtle px-2 py-0.5 text-[13px] font-medium text-primary">
+    <span className="inline-flex items-center gap-1 rounded-full bg-primary-subtle px-2 py-0.5 text-[13px] font-medium text-primary-strong">
       <Sparkle size={12} weight="fill" />
       AI 추천
     </span>

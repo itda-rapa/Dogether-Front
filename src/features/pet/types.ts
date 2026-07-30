@@ -10,7 +10,6 @@ export type Pet = {
   publicTag: string
   ownerPublicTag?: string
   nickname: string
-  breedCode: string | null
   breedName: string | null
   sex: PetSex
   neutered: boolean | null

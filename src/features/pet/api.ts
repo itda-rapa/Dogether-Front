@@ -1,6 +1,16 @@
 import { apiRequest } from '@/lib/api'
 import type { Pet, PetSex, PetSize } from './types'
 
+export type ActivePetAssignmentStatus =
+  | 'ASSIGNED'
+  | 'RETRY_REQUIRED'
+  | 'NOT_APPLICABLE'
+
+export type PetCreateResponse = {
+  pet: Pet
+  activeAssignmentStatus: ActivePetAssignmentStatus
+}
+
 /** Active Pet 이 먼저, 나머지는 createdAt ASC 로 온다. */
 export function listMyPets() {
   return apiRequest<Pet[]>('/pets/me')
@@ -29,7 +39,7 @@ export type PetWriteBody = {
  * 첫 펫은 서버가 자동으로 Active 로 지정한다.
  */
 export function createPet(body: PetWriteBody & { nickname: string }) {
-  return apiRequest<{ pet: Pet; activeAssignmentStatus: string }>('/pets', {
+  return apiRequest<PetCreateResponse>('/pets', {
     method: 'POST',
     body,
   })

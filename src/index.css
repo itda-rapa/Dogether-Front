@@ -20,6 +20,7 @@
   --color-border: var(--dg-border);
 
   --color-primary: var(--dg-primary);
+  --color-primary-strong: var(--dg-primary-strong);
   --color-primary-hover: var(--dg-primary-hover);
   --color-primary-subtle: var(--dg-primary-subtle);
   --color-on-primary: var(--dg-on-primary);
@@ -34,21 +35,27 @@
     BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 
   /* LIGHT — 전 항목 WCAG AA 검증 완료 */
-  /*
-    배경은 웜샌드. 처음에 #FFFBF5 로 잡았더니 흰 카드와 명도차가 1.03:1 밖에
-    안 나와서 카드가 카드로 안 읽혔다. 지금은 1.15:1 로 분리된다.
-  */
-  --dg-background: #f3efe7;
+  /* 밝은 teal 강조색과 같은 계열의 아주 옅은 페이지 배경 */
+  --dg-background: #f0fdfa;
   --dg-surface: #ffffff;
-  --dg-muted: #e7e1d6; /* 이미지/영상 자리표시자. 브랜드색으로 채우지 않는다 */
-  --dg-foreground: #0f172a; /* 15.6:1 */
-  --dg-muted-foreground: #64748b; /*  4.62:1 */
-  --dg-border: #e2dcd0;
+  --dg-muted: #e6f4f1; /* 이미지/영상 자리표시자 */
+  --dg-foreground: #0f172a;
+  /*
+    #64748B 였는데 배경 톤 조정 과정에서 4.x:1 대까지 떨어진 적이 있었다.
+    배경을 바꿀 때는 이 값도 함께 재검증할 것.
+  */
+  --dg-muted-foreground: #475569;
+  --dg-border: #cbe9e3;
 
-  --dg-primary: #0f766e; /* 흰 글씨 5.47:1 / 배경 위 텍스트 5.31:1 — 양쪽 통과 */
-  --dg-primary-hover: #115e59;
+  /*
+    밝은 teal은 버튼·배지 같은 면에 사용한다. 작은 컬러 텍스트는
+    대비를 위해 primary-strong을 사용한다.
+  */
+  --dg-primary: #2dd4bf;
+  --dg-primary-strong: #0f766e;
+  --dg-primary-hover: #14b8a6;
   --dg-primary-subtle: #ccfbf1;
-  --dg-on-primary: #ffffff;
+  --dg-on-primary: #0f172a;
 
   --dg-like: #ff7f50; /* 좋아요 전용 기능색. 텍스트 색으로 쓰면 2.42:1 — 금지 */
   --dg-destructive: #dc2626; /*  4.53:1 */
@@ -71,6 +78,7 @@
   --dg-border: rgb(255 255 255 / 0.08);
 
   --dg-primary: #2dd4bf; /*  9.59:1 */
+  --dg-primary-strong: #2dd4bf;
   --dg-primary-hover: #5eead4;
   --dg-primary-subtle: rgb(45 212 191 / 0.14);
   --dg-on-primary: #0f172a; /* 청록이 매우 밝아 흰 글씨는 안 읽힌다 */

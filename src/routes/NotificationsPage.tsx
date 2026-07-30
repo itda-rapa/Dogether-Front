@@ -36,7 +36,7 @@ export function NotificationsPage() {
                 aria-hidden
                 className={cn(
                   'mt-0.5 shrink-0',
-                  n.kind === 'like' ? 'text-like' : 'text-primary',
+                  n.kind === 'like' ? 'text-like' : 'text-primary-strong',
                 )}
               >
                 {ICONS[n.kind]}

@@ -151,7 +151,7 @@ function SentList() {
         >
           <Avatar />
           <Info nickname={r.nickname} publicTag={r.publicTag} />
-          <span className="shrink-0 rounded-full bg-primary-subtle px-3 py-1 text-[13px] font-medium text-primary">
+          <span className="shrink-0 rounded-full bg-primary-subtle px-3 py-1 text-[13px] font-medium text-primary-strong">
             대기 중
           </span>
           <button

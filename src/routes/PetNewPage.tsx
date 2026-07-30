@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -6,7 +7,9 @@ import { BackLink } from '@/components/ui/BackLink'
 import { Field } from '@/components/ui/Field'
 import { inputClass } from '@/components/ui/input-class'
 import { Button } from '@/components/ui/Button'
-import { NotConnected } from '@/components/ui/NotConnected'
+import { createPet, type PetWriteBody } from '@/features/pet/api'
+import type { PetSex, PetSize } from '@/features/pet/types'
+import { ApiError } from '@/lib/api'
 import { cn } from '@/lib/cn'
 
 // 제약은 OpenAPI PetCreateRequest 를 그대로 옮긴 것이다.
@@ -46,11 +49,27 @@ const SIZE = [
 
 export function PetNewPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const { register, handleSubmit, formState } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: 'onTouched',
     defaultValues: { nickname: '', breedName: '', bio: '', careNote: '' },
+  })
+
+  const create = useMutation({
+    mutationFn: createPet,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['me'] }),
+        queryClient.invalidateQueries({ queryKey: ['pets', 'me'] }),
+      ])
+      navigate('/me', { replace: true })
+    },
+  })
+
+  const onSubmit = handleSubmit((values) => {
+    create.mutate(toCreateBody(values))
   })
 
   return (
@@ -64,8 +83,7 @@ export function PetNewPage() {
       <form
         className="mt-6 flex flex-col gap-6"
         noValidate
-        // TODO: POST /pets 연동
-        onSubmit={handleSubmit(() => navigate('/me'))}
+        onSubmit={onSubmit}
       >
         <Field label="이름" error={formState.errors.nickname?.message}>
           {({ id, describedBy, invalid }) => (
@@ -186,18 +204,67 @@ export function PetNewPage() {
           )}
         </Field>
 
-        <NotConnected
-          endpoint="POST /pets"
-          note="한 사용자당 미삭제 펫은 최대 5마리입니다. 첫 펫은 자동으로 대표 강아지가 됩니다."
-        />
+        <p className="text-[13px] text-muted-foreground">
+          한 사용자당 최대 5마리까지 등록할 수 있습니다. 첫 강아지는 자동으로
+          대표 강아지가 됩니다.
+        </p>
+
+        {create.isError && (
+          <p role="alert" className="text-[14px] text-destructive">
+            {toCreateError(create.error)}
+          </p>
+        )}
 
         <div className="flex gap-3">
-          <Button type="submit">등록</Button>
-          <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
+          <Button type="submit" disabled={create.isPending}>
+            {create.isPending ? '등록 중…' : '등록'}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => navigate(-1)}
+            disabled={create.isPending}
+          >
             취소
           </Button>
         </div>
       </form>
     </div>
   )
+}
+
+function toCreateBody(values: FormValues): PetWriteBody & { nickname: string } {
+  const optionalText = (value: string | undefined) => {
+    const trimmed = value?.trim()
+    return trimmed ? trimmed : null
+  }
+
+  return {
+    nickname: values.nickname.trim(),
+    breedName: optionalText(values.breedName),
+    sex: (values.sex || null) as PetSex,
+    neutered:
+      values.neutered === '' || values.neutered === undefined
+        ? null
+        : values.neutered === 'true',
+    birthDate: values.birthDate || null,
+    weightKg: values.weightKg ? Number(values.weightKg) : null,
+    sizeCode: (values.sizeCode || null) as PetSize,
+    bio: optionalText(values.bio),
+    personalityTags: [],
+    careNote: optionalText(values.careNote),
+  }
+}
+
+function toCreateError(error: unknown): string {
+  if (!(error instanceof ApiError)) {
+    return '강아지를 등록하지 못했습니다. 네트워크 연결을 확인해 주세요.'
+  }
+  if (error.code === 'PET_LIMIT_EXCEEDED') {
+    return '강아지는 최대 5마리까지 등록할 수 있습니다.'
+  }
+  if (error.code === 'VALIDATION_FAILED') {
+    return '입력한 정보를 다시 확인해 주세요.'
+  }
+  return error.message || '강아지를 등록하지 못했습니다.'
 }

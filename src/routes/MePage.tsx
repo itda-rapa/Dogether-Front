@@ -116,7 +116,7 @@ export function MePage() {
           <h2 className="flex-1 text-lg font-bold">나의 펫</h2>
           <Link
             to="/me/pets/new"
-            className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-primary"
+            className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-primary-strong"
           >
             <Plus size={18} weight="bold" />
             등록
@@ -248,7 +248,7 @@ function UnavailableNotice({
           <button
             type="button"
             onClick={onRetry}
-            className="mt-3 inline-flex min-h-11 items-center gap-1.5 font-semibold text-primary"
+            className="mt-3 inline-flex min-h-11 items-center gap-1.5 font-semibold text-primary-strong"
           >
             <ArrowClockwise size={18} />
             다시 시도
@@ -313,7 +313,7 @@ function PetRow({
               <SealCheck
                 size={16}
                 weight="fill"
-                className="shrink-0 text-primary"
+                className="shrink-0 text-primary-strong"
                 aria-label="인증된 펫"
               />
             )}
@@ -335,7 +335,7 @@ function PetRow({
           type="button"
           onClick={onActivate}
           disabled={activating || pet.status !== 'ACTIVE'}
-          className="min-h-11 shrink-0 rounded-lg border-2 border-primary px-3 font-semibold text-primary transition-colors hover:bg-primary-subtle disabled:opacity-50"
+          className="min-h-11 shrink-0 rounded-lg border-2 border-primary px-3 font-semibold text-primary-strong transition-colors hover:bg-primary-subtle disabled:opacity-50"
         >
           {activating ? '변경 중…' : '대표로'}
         </button>

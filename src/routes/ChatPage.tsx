@@ -62,7 +62,7 @@ function RoomRow({ room }: { room: ChatRoom }) {
             <SealCheck
               size={15}
               weight="fill"
-              className="shrink-0 text-primary"
+              className="shrink-0 text-primary-strong"
               aria-label="인증된 펫"
             />
           )}
@@ -91,8 +91,6 @@ function RoomsError({ error, onRetry }: { error: unknown; onRetry: () => void })
 
   // 403 은 Active Pet 이 없어 채팅 자체를 쓸 수 없는 상태다. 재시도해도 소용없다.
   const needsActivePet = api?.status === 403
-  const notImplemented = api?.status === 404
-
   return (
     <div
       role="alert"
@@ -103,27 +101,23 @@ function RoomsError({ error, onRetry }: { error: unknown; onRetry: () => void })
         <p className="font-semibold">
           {needsActivePet
             ? '대표 강아지가 필요합니다'
-            : notImplemented
-              ? '아직 준비되지 않은 기능입니다'
-              : '채팅 목록을 불러오지 못했습니다'}
+            : '채팅 목록을 불러오지 못했습니다'}
         </p>
         <p className="mt-1 text-[14px] text-muted-foreground">
           {needsActivePet
             ? '마이 페이지에서 대표 강아지를 지정하면 채팅을 쓸 수 있습니다.'
-            : notImplemented
-              ? '백엔드에 GET /chat/rooms 가 아직 구현되지 않았습니다.'
-              : '잠시 후 다시 시도해 주세요.'}
+            : api?.message ?? '잠시 후 다시 시도해 주세요.'}
         </p>
         {needsActivePet ? (
-          <Link to="/me" className="mt-3 inline-flex min-h-11 items-center font-semibold text-primary">
+          <Link to="/me" className="mt-3 inline-flex min-h-11 items-center font-semibold text-primary-strong">
             마이 페이지로
           </Link>
         ) : (
-          !notImplemented && (
+          (
             <button
               type="button"
               onClick={onRetry}
-              className="mt-3 inline-flex min-h-11 items-center gap-1.5 font-semibold text-primary"
+              className="mt-3 inline-flex min-h-11 items-center gap-1.5 font-semibold text-primary-strong"
             >
               <ArrowClockwise size={18} />
               다시 시도

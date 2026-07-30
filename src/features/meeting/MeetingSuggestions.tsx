@@ -75,7 +75,7 @@ export function MeetingSuggestions({
           */
           className="flex w-[150px] shrink-0 flex-col justify-center gap-0.5 rounded-xl border border-primary bg-primary-subtle px-3 py-2 text-left transition-colors hover:bg-primary hover:text-on-primary"
         >
-          <span className="truncate font-semibold text-primary group-hover:text-on-primary">
+          <span className="truncate font-semibold text-primary-strong group-hover:text-on-primary">
             {s.place ?? '장소 미정'}
           </span>
           <span className="truncate text-[13px] text-muted-foreground">
@@ -97,7 +97,7 @@ function Strip({
   return (
     <div className="border-t border-border px-3 py-2">
       <div className="mb-1.5 flex items-center gap-1.5">
-        <Sparkle size={13} weight="fill" className="text-primary" aria-hidden />
+        <Sparkle size={13} weight="fill" className="text-primary-strong" aria-hidden />
         <p className="text-[13px] font-medium text-muted-foreground">
           대화에서 약속을 찾았어요
         </p>

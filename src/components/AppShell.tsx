@@ -58,9 +58,9 @@ function Header() {
           <span className="truncate font-semibold">
             {me?.nickname ?? '내 프로필'}
           </span>
-          {/* 동네 뱃지는 솔리드 청록. 브랜드색이 실제로 보이는 몇 안 되는 자리다. */}
+          {/* 동네 코드는 정보성 태그라 솔리드 CTA보다 낮은 위계로 표시한다. */}
           {me && (
-            <span className="shrink-0 rounded-full bg-primary px-2.5 py-1 text-[13px] font-semibold text-on-primary">
+            <span className="shrink-0 rounded-full bg-primary-subtle px-2.5 py-1 text-[13px] font-medium text-primary-strong">
               {me.neighborhoodCode}
             </span>
           )}
@@ -131,7 +131,7 @@ function IconButton({
 function Sidebar() {
   return (
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 border-r border-border bg-surface px-3 py-4 md:block">
-      <div className="px-3 pb-6 text-xl font-bold text-primary">Dogether</div>
+      <div className="px-3 pb-6 text-xl font-bold text-primary-strong">Dogether</div>
 
       {/* 하단 탭바와 동시에 DOM 에 존재하므로 landmark 라벨을 구분한다 */}
       <nav aria-label="주요 메뉴 (사이드바)">
@@ -144,11 +144,11 @@ function Sidebar() {
                 className={({ isActive }) =>
                   cn(
                     'flex min-h-11 items-center gap-3 rounded-lg px-3 font-medium transition-colors',
-                    // 활성 항목은 솔리드 청록. 창백한 민트로 두면 어디가 켜졌는지 안 읽힌다.
+                    // 데스크톱 활성 메뉴는 hover와 같은 민트 계열로 통일한다.
                     isActive
-                      ? 'bg-primary text-on-primary'
-                      : 'text-muted-foreground hover:bg-primary-subtle hover:text-primary',
-                    !isActive && emphasized && 'text-primary',
+                      ? 'bg-primary-subtle text-primary-strong'
+                      : 'text-muted-foreground hover:bg-primary-subtle hover:text-primary-strong',
+                    !isActive && emphasized && 'text-primary-strong',
                   )
                 }
               >
@@ -182,7 +182,7 @@ function BottomTabBar() {
               className={({ isActive }) =>
                 cn(
                   'flex h-16 flex-col items-center justify-center gap-1 transition-colors',
-                  isActive ? 'text-primary' : 'text-muted-foreground',
+                  isActive ? 'text-primary-strong' : 'text-muted-foreground',
                 )
               }
             >

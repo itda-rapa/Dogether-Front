@@ -3,10 +3,13 @@ import type { PetSearchItem } from '@/features/chat/types'
 
 export type FriendRequest = {
   requestId: number
-  fromPet: PetSearchItem
-  toPet: PetSearchItem
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELED'
-  createdAt: string
+  requesterPet: PetSearchItem
+  targetPet: PetSearchItem
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'EXPIRED'
+  requestedAt: string
+  respondedAt: string | null
+  expiresAt: string
+  directRoomId: number | null
 }
 
 export type FriendRequestListResult = {
@@ -14,10 +17,10 @@ export type FriendRequestListResult = {
   page: { nextCursor: string | null; hasNext: boolean }
 }
 
-export function sendFriendRequest(toPetId: number) {
+export function sendFriendRequest(targetPetId: number) {
   return apiRequest<FriendRequest>('/friend-requests', {
     method: 'POST',
-    body: { toPetId },
+    body: { targetPetId },
   })
 }
 

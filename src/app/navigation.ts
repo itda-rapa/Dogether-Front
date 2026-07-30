@@ -12,7 +12,7 @@ export type NavItem = {
   to: string
   label: string
   icon: Icon
-  /** 가운데 액션 버튼(셋로그 추가)만 시각적으로 강조한다. */
+  /** 가운데 액션 버튼(미디어 업로드)만 시각적으로 강조한다. */
   emphasized?: boolean
 }
 
@@ -28,7 +28,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: '홈', icon: House },
   { to: '/board', label: '게시판', icon: Article },
-  { to: '/upload', label: '셋로그 추가', icon: Plus, emphasized: true },
+  { to: '/upload', label: '업로드', icon: Plus, emphasized: true },
   { to: '/chat', label: '채팅', icon: ChatCircle },
   { to: '/map', label: '지도', icon: MapTrifold },
 ]

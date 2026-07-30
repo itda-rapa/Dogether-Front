@@ -23,7 +23,7 @@ export function PostDetailPage() {
       <BackLink to="/board" label="게시판" />
 
       <article className="mt-4">
-        <p className="text-[13px] font-medium text-primary">자유</p>
+        <p className="text-[13px] font-medium text-primary-strong">자유</p>
         <h1 className="mt-1 text-2xl font-bold leading-tight">
           중앙공원 산책로 공사 끝났네요
         </h1>
@@ -159,7 +159,7 @@ function CommentRow({ comment }: { comment: PlaceholderComment }) {
           <LikeButton count={comment.likes} />
           <button
             type="button"
-            className="min-h-11 px-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"
+            className="min-h-11 px-2 text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary-strong"
           >
             답글
           </button>

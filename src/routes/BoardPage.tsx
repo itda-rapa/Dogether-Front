@@ -103,7 +103,7 @@ function PostRow({ post }: { post: PlaceholderPost }) {
       to={`/board/${post.id}`}
       className="block rounded-xl border border-border bg-surface p-4 transition-colors hover:bg-primary-subtle"
     >
-      <p className="text-[13px] font-medium text-primary">{post.category}</p>
+      <p className="text-[13px] font-medium text-primary-strong">{post.category}</p>
       <p className="mt-1 font-semibold">{post.title}</p>
       <p className="mt-1 line-clamp-2 text-[14px] text-muted-foreground">
         {post.excerpt}

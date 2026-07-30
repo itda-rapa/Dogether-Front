@@ -17,6 +17,27 @@
 
 생성된 추천 중 이 프로젝트에서 **틀린 값**을 아래와 같이 교정했다. 본문 값은 이미 교정본으로 갱신되어 있다.
 
+### 최신 색상 결정 (2026-07-30)
+
+아래 팔레트가 현재 구현의 정본이며, 이 문서 아래쪽에 남은 이전 색상 결정과
+예시는 히스토리로만 본다.
+
+| 역할 | 값 | 사용 |
+|---|---|---|
+| Primary Accent | `#2DD4BF` | 버튼·동네 태그·선택된 면 |
+| Primary Hover | `#14B8A6` | 강조 면 hover |
+| Primary Strong | `#0F766E` | 링크·아이콘·작은 강조 텍스트 |
+| Primary Subtle | `#CCFBF1` | 메뉴 선택·hover 배경 |
+| On Primary | `#0F172A` | 밝은 accent 면 위 글자 |
+| Background | `#F0FDFA` | 페이지 배경 |
+| Surface | `#FFFFFF` | 카드·사이드바·헤더 |
+| Muted | `#E6F4F1` | 미디어 자리표시자 |
+| Border | `#CBE9E3` | 카드·구분선 |
+| Ring | `#0F766E` | 접근성 포커스 링 |
+
+`#2DD4BF`는 밝은 배경 위 작은 텍스트로 사용하면 대비가 부족하다. 따라서
+면 색은 Primary Accent, 텍스트 색은 Primary Strong으로 분리한다.
+
 | # | 생성값 | 교정값 | 이유 |
 |---|--------|--------|------|
 | 1 | Varela Round / Nunito Sans | **Pretendard Variable** | 원본 두 폰트 모두 한글 글리프 없음. 앱 전체가 한국어. |

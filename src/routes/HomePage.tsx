@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Heart, Smiley, HandWaving, Play, SealCheck } from '@phosphor-icons/react'
 import { Page } from '@/components/ui/Page'
-import { NotConnected } from '@/components/ui/NotConnected'
+import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { ModerationMenu } from '@/components/ModerationMenu'
 import { listSetlogs, addReaction, removeReaction, sendGreeting } from '@/features/setlog/api'
 import {
@@ -23,9 +24,6 @@ export function HomePage() {
     staleTime: 60_000,
   })
 
-  const notImplemented =
-    setlogs.error instanceof ApiError && setlogs.error.status === 404
-
   return (
     <Page
       title="우리 동네 셋로그"
@@ -35,19 +33,24 @@ export function HomePage() {
 
       {setlogs.isError && (
         <div className="mb-6">
-          <NotConnected
-            endpoint="GET /setlogs"
-            note={
-              notImplemented
-                ? '백엔드에 아직 구현되지 않았습니다. 아래는 레이아웃 확인용 예시입니다.'
-                : '목록을 불러오지 못했습니다. 아래는 레이아웃 확인용 예시입니다.'
-            }
+          <ApiErrorNotice
+            error={setlogs.error}
+            title="셋로그를 불러오지 못했습니다"
+            onRetry={() => void setlogs.refetch()}
           />
         </div>
       )}
 
+      {/* API 는 성공했지만 데이터가 비어 있는 경우. 에러가 아니므로 별도로 안내한다. */}
+      {setlogs.isSuccess && setlogs.data.length === 0 && (
+        <EmptyState
+          title="아직 올라온 셋로그가 없습니다"
+          description="동네 강아지들의 영상이 올라오면 여기에 보여요."
+        />
+      )}
+
       <ul className="flex flex-col gap-4">
-        {(setlogs.data ?? (setlogs.isError ? PLACEHOLDER : [])).map((s) => (
+        {(setlogs.data ?? []).map((s) => (
           <li key={s.setlogId}>
             <SetlogCard setlog={s} live={Boolean(setlogs.data)} />
           </li>
@@ -134,7 +137,7 @@ function SetlogCard({ setlog, live }: { setlog: Setlog; live: boolean }) {
               <SealCheck
                 size={15}
                 weight="fill"
-                className="shrink-0 text-primary"
+                className="shrink-0 text-primary-strong"
                 aria-label="인증된 펫"
               />
             )}
@@ -174,7 +177,7 @@ function SetlogCard({ setlog, live }: { setlog: Setlog; live: boolean }) {
           type="button"
           onClick={() => greet.mutate()}
           disabled={!interactive || !live || greet.isPending}
-          className="ml-auto inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 font-semibold text-primary transition-colors hover:bg-primary-subtle disabled:opacity-50"
+          className="ml-auto inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 font-semibold text-primary-strong transition-colors hover:bg-primary-subtle disabled:opacity-50"
         >
           <HandWaving size={20} weight="fill" />
           {greet.isPending ? '보내는 중…' : '인사하기'}
@@ -249,37 +252,9 @@ function FeedSkeleton() {
 
 function toGreetMessage(e: unknown): string {
   if (!(e instanceof ApiError)) return '인사를 보내지 못했습니다.'
-  if (e.status === 404) return '인사 기능이 아직 준비되지 않았습니다. (POST /setlogs/{id}/greetings 미구현)'
+  if (e.status === 404) return '셋로그를 찾을 수 없거나 인사할 수 없는 상대입니다.'
   if (e.status === 429) return '오늘 인사할 수 있는 인원을 모두 사용했습니다. (하루 10명)'
   if (e.status === 409) return '이미 대화 중인 상대입니다.'
   if (e.status === 403) return '대표 강아지를 지정해야 인사할 수 있습니다.'
   return '인사를 보내지 못했습니다.'
 }
-
-/** 백엔드 미구현 시 레이아웃 확인용. 연동되면 쓰이지 않는다. */
-const PLACEHOLDER: Setlog[] = [
-  {
-    setlogId: 1,
-    authorPet: { petId: 101, publicTag: '까망#A7K2', nickname: '까망', profileUrl: null, verified: true, relationship: 'NONE' },
-    mediaUrl: '',
-    mediaUrlExpiresAt: new Date(Date.now() + 600_000).toISOString(),
-    caption: '오늘 산책 성공',
-    cuteCount: 12,
-    likeCount: 5,
-    myReactions: [],
-    canInteract: true,
-    createdAt: new Date().toISOString(),
-  },
-  {
-    setlogId: 2,
-    authorPet: { petId: 102, publicTag: '봉이#B3X9', nickname: '봉이', profileUrl: null, verified: false, relationship: 'NONE' },
-    mediaUrl: '',
-    mediaUrlExpiresAt: new Date(Date.now() + 600_000).toISOString(),
-    caption: null,
-    cuteCount: 8,
-    likeCount: 3,
-    myReactions: ['CUTE'],
-    canInteract: true,
-    createdAt: new Date().toISOString(),
-  },
-]

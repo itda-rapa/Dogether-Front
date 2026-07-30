@@ -27,7 +27,7 @@ export function PetVerifyPage() {
       <BackLink to="/me" label="마이 페이지" />
 
       <div className="mt-4 flex items-center gap-2">
-        <SealCheck size={26} weight="fill" className="text-primary" aria-hidden />
+        <SealCheck size={26} weight="fill" className="text-primary-strong" aria-hidden />
         <h1 className="text-2xl font-bold">펫 인증</h1>
       </div>
       <p className="mt-1 text-[14px] text-muted-foreground">

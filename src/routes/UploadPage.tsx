@@ -1,109 +1,224 @@
-import { useState } from 'react'
-import { FilmSlate, UploadSimple } from '@phosphor-icons/react'
+import { useEffect, useRef, useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
+import {
+  CheckCircle,
+  FileImage,
+  FilmSlate,
+  UploadSimple,
+} from '@phosphor-icons/react'
 import { Page } from '@/components/ui/Page'
 import { Button } from '@/components/ui/Button'
-import { NotConnected } from '@/components/ui/NotConnected'
-import { Field } from '@/components/ui/Field'
-import { inputClass } from '@/components/ui/input-class'
-import { cn } from '@/lib/cn'
-
-/** 기획: 30초 영상을 불러와 3~5초 구간만 잘라 올린다. */
-const MIN_SEC = 3
-const MAX_SEC = 5
+import {
+  getMediaType,
+  MediaUploadError,
+  uploadMedia,
+} from '@/features/media/api'
+import type {
+  MediaType,
+  MediaUploadProgress,
+} from '@/features/media/types'
+import { ApiError, NetworkError } from '@/lib/api'
 
 export function UploadPage() {
-  const [start, setStart] = useState(0)
-  const [caption, setCaption] = useState('')
-  const duration = 30
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [mediaType, setMediaType] = useState<MediaType | null>(null)
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null)
+  const [selectionError, setSelectionError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<MediaUploadProgress | null>(null)
 
-  const end = Math.min(start + MAX_SEC, duration)
+  useEffect(() => {
+    if (!file) {
+      setLocalPreviewUrl(null)
+      return
+    }
+    const url = URL.createObjectURL(file)
+    setLocalPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [file])
+
+  const upload = useMutation({
+    mutationFn: (selected: File) => uploadMedia(selected, setProgress),
+  })
+
+  const reset = () => {
+    upload.reset()
+    setFile(null)
+    setMediaType(null)
+    setSelectionError(null)
+    setProgress(null)
+    if (inputRef.current) inputRef.current.value = ''
+  }
+
+  const chooseFile = (selected: File | undefined) => {
+    upload.reset()
+    setProgress(null)
+    if (!selected) return
+    try {
+      const type = getMediaType(selected)
+      setFile(selected)
+      setMediaType(type)
+      setSelectionError(null)
+    } catch (error) {
+      setFile(null)
+      setMediaType(null)
+      setSelectionError(toUploadError(error))
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  const previewUrl = upload.data?.downloadUrl ?? localPreviewUrl
 
   return (
     <Page
-      title="셋로그 추가"
-      description={`영상을 불러와 ${MIN_SEC}~${MAX_SEC}초 구간으로 잘라 올립니다`}
+      title="미디어 업로드"
+      description="현재 S3 미디어 API로 JPEG 이미지나 MP4 영상을 업로드합니다"
     >
-      {/*
-        M1 범위 주의: 셋로그 업로드는 시드 콘텐츠를 넣는 관리자만 가능하다.
-        일반 사용자 업로드는 M2 다. 이 화면은 M2 대비 껍데기다.
-      */}
       <div className="mb-6 rounded-xl border border-border bg-surface p-4">
-        <p className="font-semibold">M2 기능입니다</p>
+        <p className="font-semibold">미디어 저장 기능 테스트</p>
         <p className="mt-1 text-[14px] text-muted-foreground">
-          M1 에서는 관리자만 셋로그를 업로드합니다. 일반 사용자 업로드는 M2
-          범위입니다.
+          여기서는 미디어 파일 저장까지만 완료됩니다. 셋로그·게시글 생성 API는
+          아직 없어 피드에는 게시되지 않습니다.
         </p>
       </div>
 
-      <div
-        role="img"
-        aria-label="영상 미리보기 영역"
-        className="mb-4 grid aspect-[4/5] w-full place-items-center rounded-xl border border-border bg-muted text-muted-foreground"
-      >
-        <FilmSlate size={36} />
+      <div className="mb-4 grid min-h-72 w-full place-items-center overflow-hidden rounded-xl border border-border bg-muted text-muted-foreground">
+        {previewUrl && mediaType === 'IMAGE' ? (
+          <img
+            src={previewUrl}
+            alt="선택한 이미지 미리보기"
+            className="max-h-[32rem] w-full object-contain"
+          />
+        ) : previewUrl && mediaType === 'VIDEO' ? (
+          <video
+            src={previewUrl}
+            controls
+            className="max-h-[32rem] w-full"
+            aria-label="선택한 영상 미리보기"
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-2">
+            <FilmSlate size={38} />
+            <span className="text-[14px]">업로드할 파일을 선택해 주세요</span>
+          </div>
+        )}
       </div>
 
-      <Button variant="secondary" className="mb-6 w-full">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,video/mp4"
+        className="sr-only"
+        onChange={(event) => chooseFile(event.target.files?.[0])}
+      />
+      <Button
+        variant="secondary"
+        className="w-full"
+        disabled={upload.isPending}
+        onClick={() => inputRef.current?.click()}
+      >
         <UploadSimple size={20} />
-        영상 불러오기
+        JPEG 또는 MP4 선택
       </Button>
 
-      <section className="mb-6">
-        <h2 className="mb-1 font-medium">구간 선택</h2>
-        <p className="mb-3 text-[13px] text-muted-foreground">
-          시작 지점을 옮기면 {MAX_SEC}초 구간이 잡힙니다.
-        </p>
-
-        <label htmlFor="trim-start" className="sr-only">
-          시작 지점
-        </label>
-        <input
-          id="trim-start"
-          type="range"
-          min={0}
-          max={Math.max(duration - MIN_SEC, 0)}
-          step={0.5}
-          value={start}
-          onChange={(e) => setStart(Number(e.target.value))}
-          className="w-full accent-[var(--dg-primary)]"
-        />
-
-        <div className="mt-2 flex justify-between text-[13px] tabular-nums text-muted-foreground">
-          <span>{start.toFixed(1)}초</span>
-          <span className="font-medium text-primary">
-            {(end - start).toFixed(1)}초 선택됨
-          </span>
-          <span>{duration}초</span>
+      {file && (
+        <div className="mt-4 flex items-center gap-3 rounded-xl border border-border bg-surface p-4">
+          <FileImage size={24} className="shrink-0 text-primary-strong" />
+          <div className="min-w-0">
+            <p className="truncate font-medium">{file.name}</p>
+            <p className="text-[13px] text-muted-foreground">
+              {formatBytes(file.size)} · {mediaType === 'IMAGE' ? '이미지' : '영상'}
+            </p>
+          </div>
         </div>
-      </section>
+      )}
 
-      <div className="mb-6">
-        <Field label="설명" hint="셋로그처럼 짧은 텍스트를 넣을 수 있습니다">
-          {({ id, describedBy }) => (
-            <textarea
-              id={id}
-              rows={3}
-              maxLength={200}
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              aria-describedby={describedBy}
-              className={cn(inputClass(false), 'resize-y py-3')}
+      {upload.isPending && progress && (
+        <div className="mt-4" aria-live="polite">
+          <div className="mb-2 flex justify-between text-[13px]">
+            <span>{stageLabel(progress)}</span>
+            <span>{progressPercent(progress)}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-[width]"
+              style={{ width: `${progressPercent(progress)}%` }}
             />
-          )}
-        </Field>
-      </div>
+          </div>
+        </div>
+      )}
 
-      <NotConnected
-        endpoint="POST /media/uploads · POST /media/{id}/complete · POST /setlogs"
-        note="브라우저에서 구간을 자르려면 WebCodecs 또는 ffmpeg.wasm 이 필요합니다. 클라이언트 편집 가능 여부가 아직 확인되지 않았습니다 — 서버에서 자르는 방식도 검토 대상입니다."
-      />
+      {selectionError && (
+        <p role="alert" className="mt-4 text-[14px] text-destructive">
+          {selectionError}
+        </p>
+      )}
+
+      {upload.isError && (
+        <p role="alert" className="mt-4 text-[14px] text-destructive">
+          {toUploadError(upload.error)}
+        </p>
+      )}
+
+      {upload.isSuccess && (
+        <div
+          role="status"
+          className="mt-4 flex items-start gap-3 rounded-xl border border-primary bg-primary-subtle p-4"
+        >
+          <CheckCircle size={24} weight="fill" className="shrink-0 text-primary-strong" />
+          <div>
+            <p className="font-semibold">미디어 업로드 완료</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              미디어 ID {upload.data.media.id} · 상태 {upload.data.media.status}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 flex gap-3">
-        <Button disabled>업로드</Button>
-        <Button variant="secondary" disabled>
-          취소
+        <Button
+          disabled={!file || upload.isPending || upload.isSuccess}
+          onClick={() => file && upload.mutate(file)}
+        >
+          {upload.isPending ? '업로드 중…' : '미디어 업로드'}
+        </Button>
+        <Button
+          variant="secondary"
+          disabled={upload.isPending}
+          onClick={reset}
+        >
+          초기화
         </Button>
       </div>
     </Page>
   )
+}
+
+function progressPercent(progress: MediaUploadProgress): number {
+  if (progress.stage === 'completing') return 100
+  if (progress.stage === 'initializing' || progress.totalBytes === 0) return 0
+  return Math.round((progress.uploadedBytes / progress.totalBytes) * 100)
+}
+
+function stageLabel(progress: MediaUploadProgress): string {
+  if (progress.stage === 'initializing') return '업로드 준비 중'
+  if (progress.stage === 'completing') return '업로드 완료 처리 중'
+  return '스토리지에 업로드 중'
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function toUploadError(error: unknown): string {
+  if (
+    error instanceof MediaUploadError ||
+    error instanceof ApiError ||
+    error instanceof NetworkError
+  ) {
+    return error.message
+  }
+  return '미디어를 업로드하지 못했습니다. 잠시 후 다시 시도해 주세요.'
 }

@@ -88,7 +88,7 @@ export function LoginPage() {
 
       <p className="mt-6 text-center text-[14px] text-muted-foreground">
         계정이 없으신가요?{' '}
-        <Link to="/signup" className="font-semibold text-primary">
+        <Link to="/signup" className="font-semibold text-primary-strong">
           회원가입
         </Link>
       </p>

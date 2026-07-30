@@ -59,6 +59,8 @@ export type MeetingCard = {
   placeText: string
   meetAt: string
   status: 'OPEN' | 'CANCELED'
+  canceledByPetId: number | null
+  canceledAt: string | null
   createdAt: string
 }
 

@@ -150,7 +150,7 @@ export function SignupPage() {
                 <button
                   type="button"
                   onClick={() => void neighborhoods.refetch()}
-                  className="mt-1 inline-flex min-h-11 items-center gap-1.5 self-start font-semibold text-primary"
+                  className="mt-1 inline-flex min-h-11 items-center gap-1.5 self-start font-semibold text-primary-strong"
                 >
                   <ArrowClockwise size={18} />
                   다시 시도
@@ -173,7 +173,7 @@ export function SignupPage() {
 
       <p className="mt-6 text-center text-[14px] text-muted-foreground">
         이미 계정이 있으신가요?{' '}
-        <Link to="/login" className="font-semibold text-primary">
+        <Link to="/login" className="font-semibold text-primary-strong">
           로그인
         </Link>
       </p>

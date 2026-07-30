@@ -66,7 +66,7 @@ export function AdminReportsPage() {
       <BackLink to="/me" label="마이 페이지" />
 
       <div className="mt-4 flex items-center gap-2">
-        <ShieldCheck size={26} weight="fill" className="text-primary" aria-hidden />
+        <ShieldCheck size={26} weight="fill" className="text-primary-strong" aria-hidden />
         <h1 className="text-2xl font-bold">신고 처리</h1>
       </div>
 

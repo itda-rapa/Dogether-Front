@@ -12,7 +12,7 @@ const VARIANTS: Record<Variant, string> = {
   primary: 'bg-primary text-on-primary hover:bg-primary-hover',
   // 청록은 텍스트로도 대비를 통과하므로 아웃라인에 그대로 쓸 수 있다
   secondary:
-    'border-2 border-primary text-primary hover:bg-primary-subtle bg-transparent',
+    'border-2 border-primary text-primary-strong hover:bg-primary-subtle bg-transparent',
   ghost: 'text-foreground hover:bg-primary-subtle bg-transparent',
 }
 

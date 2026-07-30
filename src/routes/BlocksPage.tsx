@@ -1,10 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Prohibit } from '@phosphor-icons/react'
 import { BackLink } from '@/components/ui/BackLink'
-import { NotConnected } from '@/components/ui/NotConnected'
+import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { listBlocks } from '@/features/moderation/api'
-import { ApiError } from '@/lib/api'
 
 export function BlocksPage() {
   const blocks = useQuery({
@@ -12,9 +11,6 @@ export function BlocksPage() {
     queryFn: () => listBlocks({ limit: 50 }),
     retry: false,
   })
-
-  const notImplemented =
-    blocks.error instanceof ApiError && blocks.error.status === 404
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
@@ -63,13 +59,10 @@ export function BlocksPage() {
 
       {blocks.isError && (
         <div className="mt-6">
-          <NotConnected
-            endpoint="GET /me/blocks"
-            note={
-              notImplemented
-                ? '백엔드에 아직 구현되지 않았습니다. M1 계약에 차단 해제 API 도 없습니다 — 의도인지 누락인지 확인이 필요합니다.'
-                : '차단 목록을 불러오지 못했습니다.'
-            }
+          <ApiErrorNotice
+            error={blocks.error}
+            title="차단 목록을 불러오지 못했습니다"
+            onRetry={() => void blocks.refetch()}
           />
         </div>
       )}

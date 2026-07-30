@@ -4,10 +4,9 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { CalendarCheck, MapPin, Clock, XCircle } from '@phosphor-icons/react'
 import { BackLink } from '@/components/ui/BackLink'
 import { Button } from '@/components/ui/Button'
-import { NotConnected } from '@/components/ui/NotConnected'
+import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
 import { cancelMeetingCard, getMeetingCard } from '@/features/meeting/api'
 import { CARD_TYPE_LABEL } from '@/features/meeting/types'
-import { ApiError } from '@/lib/api'
 
 export function MeetingCardPage() {
   const { cardId = '' } = useParams()
@@ -27,15 +26,12 @@ export function MeetingCardPage() {
     onSuccess: () => card.refetch(),
   })
 
-  const notImplemented =
-    card.error instanceof ApiError && card.error.status === 404
-
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
       <BackLink to="/chat" label="채팅" />
 
       <div className="mt-4 flex items-center gap-2">
-        <CalendarCheck size={26} weight="fill" className="text-primary" aria-hidden />
+        <CalendarCheck size={26} weight="fill" className="text-primary-strong" aria-hidden />
         <h1 className="text-2xl font-bold">약속</h1>
       </div>
 
@@ -45,13 +41,10 @@ export function MeetingCardPage() {
 
       {card.isError && (
         <div className="mt-6">
-          <NotConnected
-            endpoint={`GET /meeting-cards/${cardId}`}
-            note={
-              notImplemented
-                ? '백엔드에 아직 구현되지 않았습니다.'
-                : '약속 정보를 불러오지 못했습니다.'
-            }
+          <ApiErrorNotice
+            error={card.error}
+            title="약속 정보를 불러오지 못했습니다"
+            onRetry={() => void card.refetch()}
           />
         </div>
       )}

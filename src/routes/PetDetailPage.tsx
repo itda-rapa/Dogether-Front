@@ -72,7 +72,7 @@ function PetDetail({ pet }: { pet: Pet }) {
               <SealCheck
                 size={22}
                 weight="fill"
-                className="shrink-0 text-primary"
+                className="shrink-0 text-primary-strong"
                 aria-label="인증된 펫"
               />
             )}
@@ -90,7 +90,7 @@ function PetDetail({ pet }: { pet: Pet }) {
           {pet.personalityTags.map((tag) => (
             <li
               key={tag}
-              className="rounded-full bg-primary-subtle px-3 py-1 text-[14px] font-medium text-primary"
+              className="rounded-full bg-primary-subtle px-3 py-1 text-[14px] font-medium text-primary-strong"
             >
               {tag}
             </li>

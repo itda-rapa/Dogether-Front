@@ -31,7 +31,7 @@ export function Field({ label, aiFilled, error, hint, children }: Props) {
           {label}
         </label>
         {aiFilled && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-primary-subtle px-2 py-0.5 text-[13px] font-medium text-primary">
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary-subtle px-2 py-0.5 text-[13px] font-medium text-primary-strong">
             <Sparkle size={12} weight="fill" />
             AI 추천
           </span>
