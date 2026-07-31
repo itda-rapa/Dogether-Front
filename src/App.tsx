@@ -17,6 +17,7 @@ import { PostNewPage } from '@/routes/PostNewPage'
 import { UploadPage } from '@/routes/UploadPage'
 import { MePage } from '@/routes/MePage'
 import { PetDetailPage } from '@/routes/PetDetailPage'
+import { PetProfilePage } from '@/routes/PetProfilePage'
 import { PetNewPage } from '@/routes/PetNewPage'
 import { PetVerifyPage } from '@/routes/PetVerifyPage'
 import { MeetingCardPage } from '@/routes/MeetingCardPage'
@@ -107,6 +108,9 @@ export default function App() {
                   <Route path="me/pets/new" element={<PetNewPage />} />
                   <Route path="me/pets/verify" element={<PetVerifyPage />} />
                   <Route path="me/pets/:petId" element={<PetDetailPage />} />
+
+                  {/* 남의 펫 프로필. 홈 피드 작성자 → 친구 요청 진입점 */}
+                  <Route path="pets/:petId" element={<PetProfilePage />} />
                   <Route path="me/friends" element={<FriendsPage />} />
                   <Route path="me/friends/search" element={<FriendSearchPage />} />
                   <Route path="me/places" element={<PlacesPage />} />

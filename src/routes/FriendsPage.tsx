@@ -1,9 +1,23 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { Dog, UserPlus } from '@phosphor-icons/react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Dog, UserPlus, SealCheck } from '@phosphor-icons/react'
 import { BackLink } from '@/components/ui/BackLink'
-import { NotConnected } from '@/components/ui/NotConnected'
+import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { NotConnected } from '@/components/ui/NotConnected'
+import { useAuth } from '@/features/auth/auth-context'
+import {
+  listFriends,
+  listReceivedRequests,
+  listSentRequests,
+  acceptFriendRequest,
+  rejectFriendRequest,
+  cancelFriendRequest,
+  type FriendRequest,
+} from '@/features/friend/api'
+import type { PetSearchItem } from '@/features/chat/types'
+import { ApiError } from '@/lib/api'
 import { cn } from '@/lib/cn'
 
 type Tab = 'friends' | 'received' | 'sent'
@@ -62,24 +76,46 @@ export function FriendsPage() {
         {tab === 'received' && <ReceivedList />}
         {tab === 'sent' && <SentList />}
       </div>
-
-      <div className="mt-8">
-        <NotConnected
-          endpoint={
-            tab === 'friends'
-              ? 'GET /pets/{petId}/friends · DELETE /pets/{petId}/friends/{friendPetId}'
-              : tab === 'received'
-                ? 'GET /friend-requests/received · POST /friend-requests/{id}/accept · reject'
-                : 'GET /friend-requests/sent · DELETE /friend-requests/{id}'
-          }
-        />
-      </div>
     </div>
   )
 }
 
 function FriendList() {
-  if (PLACEHOLDER_FRIENDS.length === 0) {
+  const { me } = useAuth()
+  const petId = me?.activePetId ?? null
+
+  const friends = useQuery({
+    queryKey: ['friends', petId],
+    queryFn: () => listFriends(petId as number),
+    enabled: petId !== null,
+    retry: false,
+  })
+
+  // Active Pet 이 없으면 목록 자체가 성립하지 않는다. 에러가 아니라 안내로 처리한다.
+  if (petId === null) {
+    return (
+      <EmptyState
+        title="대표 강아지를 먼저 지정해 주세요"
+        description="친구는 강아지 단위로 맺어집니다."
+      />
+    )
+  }
+
+  if (friends.isError) {
+    return (
+      <ApiErrorNotice
+        error={friends.error}
+        title="친구 목록을 불러오지 못했습니다"
+        onRetry={() => void friends.refetch()}
+      />
+    )
+  }
+
+  if (friends.isPending) return <ListSkeleton />
+
+  const items = friends.data.items
+
+  if (items.length === 0) {
     return (
       <EmptyState
         title="아직 친구가 없습니다"
@@ -89,80 +125,197 @@ function FriendList() {
   }
 
   return (
-    <ul className="flex flex-col gap-2">
-      {PLACEHOLDER_FRIENDS.map((f) => (
-        <li
-          key={f.petId}
-          className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4"
-        >
-          <Avatar />
-          <Info nickname={f.nickname} publicTag={f.publicTag} />
-          <button
-            type="button"
-            className="min-h-11 shrink-0 rounded-lg border border-border px-3 font-medium text-muted-foreground transition-colors hover:bg-primary-subtle"
+    <>
+      <ul className="flex flex-col gap-2">
+        {items.map((f) => (
+          <li
+            key={f.petId}
+            className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4"
           >
-            삭제
-          </button>
-        </li>
-      ))}
-    </ul>
+            <Avatar />
+            <Info pet={f} />
+          </li>
+        ))}
+      </ul>
+
+      {/* 친구 삭제는 백엔드에 DELETE 가 아직 없다. 버튼을 두면 404 만 난다. */}
+      <div className="mt-6">
+        <NotConnected
+          endpoint="DELETE /pets/{petId}/friends/{friendPetId}"
+          note="친구 삭제 API 가 아직 없어 삭제 버튼을 노출하지 않습니다."
+        />
+      </div>
+      {friends.data.page.hasNext && <MoreHint />}
+    </>
   )
 }
 
 function ReceivedList() {
+  const queryClient = useQueryClient()
+  const received = useQuery({
+    queryKey: ['friend-requests', 'received'],
+    queryFn: () => listReceivedRequests(),
+    retry: false,
+  })
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['friend-requests'] })
+    void queryClient.invalidateQueries({ queryKey: ['friends'] })
+  }
+
+  const accept = useMutation({
+    mutationFn: acceptFriendRequest,
+    onSuccess: invalidate,
+  })
+  const reject = useMutation({
+    mutationFn: rejectFriendRequest,
+    onSuccess: invalidate,
+  })
+
+  if (received.isError) {
+    return (
+      <ApiErrorNotice
+        error={received.error}
+        title="받은 요청을 불러오지 못했습니다"
+        onRetry={() => void received.refetch()}
+      />
+    )
+  }
+
+  if (received.isPending) return <ListSkeleton />
+
+  // 대기중인 것만 조작 대상이다. 만료·처리완료 건은 상태 배지로만 남긴다.
+  const items = received.data.items
+
+  if (items.length === 0) {
+    return <EmptyState title="받은 요청이 없습니다" />
+  }
+
+  const pending = accept.isPending || reject.isPending
+
   return (
-    <ul className="flex flex-col gap-2">
-      {PLACEHOLDER_RECEIVED.map((r) => (
-        <li
-          key={r.requestId}
-          className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4"
-        >
-          <Avatar />
-          <Info nickname={r.nickname} publicTag={r.publicTag} />
-          <button
-            type="button"
-            className="min-h-11 shrink-0 rounded-lg bg-primary px-3 font-semibold text-on-primary transition-colors hover:bg-primary-hover"
+    <>
+      <ul className="flex flex-col gap-2">
+        {items.map((r) => (
+          <li
+            key={r.requestId}
+            className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4"
           >
-            수락
-          </button>
-          <button
-            type="button"
-            className="min-h-11 shrink-0 rounded-lg border border-border px-3 font-medium text-muted-foreground transition-colors hover:bg-primary-subtle"
-          >
-            거절
-          </button>
-        </li>
-      ))}
-    </ul>
+            <Avatar />
+            <Info pet={r.requesterPet} />
+            {r.status === 'PENDING' ? (
+              <>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => accept.mutate(r.requestId)}
+                  className="min-h-11 shrink-0 rounded-lg bg-primary px-3 font-semibold text-on-primary transition-colors hover:bg-primary-hover disabled:opacity-50"
+                >
+                  수락
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => reject.mutate(r.requestId)}
+                  className="min-h-11 shrink-0 rounded-lg border border-border px-3 font-medium text-muted-foreground transition-colors hover:bg-primary-subtle disabled:opacity-50"
+                >
+                  거절
+                </button>
+              </>
+            ) : (
+              <StatusBadge status={r.status} />
+            )}
+          </li>
+        ))}
+      </ul>
+      <ActionError error={accept.error ?? reject.error} />
+      {received.data.page.hasNext && <MoreHint />}
+    </>
   )
 }
 
 function SentList() {
-  if (PLACEHOLDER_SENT.length === 0) {
+  const queryClient = useQueryClient()
+  const sent = useQuery({
+    queryKey: ['friend-requests', 'sent'],
+    queryFn: () => listSentRequests(),
+    retry: false,
+  })
+
+  const cancel = useMutation({
+    mutationFn: cancelFriendRequest,
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: ['friend-requests'] }),
+  })
+
+  if (sent.isError) {
+    return (
+      <ApiErrorNotice
+        error={sent.error}
+        title="보낸 요청을 불러오지 못했습니다"
+        onRetry={() => void sent.refetch()}
+      />
+    )
+  }
+
+  if (sent.isPending) return <ListSkeleton />
+
+  const items = sent.data.items
+
+  if (items.length === 0) {
     return <EmptyState title="보낸 요청이 없습니다" />
   }
 
   return (
-    <ul className="flex flex-col gap-2">
-      {PLACEHOLDER_SENT.map((r) => (
-        <li
-          key={r.requestId}
-          className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4"
-        >
-          <Avatar />
-          <Info nickname={r.nickname} publicTag={r.publicTag} />
-          <span className="shrink-0 rounded-full bg-primary-subtle px-3 py-1 text-[13px] font-medium text-primary-strong">
-            대기 중
-          </span>
-          <button
-            type="button"
-            className="min-h-11 shrink-0 rounded-lg border border-border px-3 font-medium text-muted-foreground transition-colors hover:bg-primary-subtle"
+    <>
+      <ul className="flex flex-col gap-2">
+        {items.map((r) => (
+          <li
+            key={r.requestId}
+            className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4"
           >
-            취소
-          </button>
-        </li>
-      ))}
-    </ul>
+            <Avatar />
+            <Info pet={r.targetPet} />
+            <StatusBadge status={r.status} />
+            {r.status === 'PENDING' && (
+              <button
+                type="button"
+                disabled={cancel.isPending}
+                onClick={() => cancel.mutate(r.requestId)}
+                className="min-h-11 shrink-0 rounded-lg border border-border px-3 font-medium text-muted-foreground transition-colors hover:bg-primary-subtle disabled:opacity-50"
+              >
+                취소
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <ActionError error={cancel.error} />
+      {sent.data.page.hasNext && <MoreHint />}
+    </>
+  )
+}
+
+const STATUS_LABEL: Record<FriendRequest['status'], string> = {
+  PENDING: '대기 중',
+  ACCEPTED: '수락됨',
+  REJECTED: '거절됨',
+  CANCELED: '취소됨',
+  EXPIRED: '만료됨',
+}
+
+function StatusBadge({ status }: { status: FriendRequest['status'] }) {
+  return (
+    <span
+      className={cn(
+        'shrink-0 rounded-full px-3 py-1 text-[13px] font-medium',
+        status === 'PENDING'
+          ? 'bg-primary-subtle text-primary-strong'
+          : 'bg-muted text-muted-foreground',
+      )}
+    >
+      {STATUS_LABEL[status]}
+    </span>
   )
 }
 
@@ -177,22 +330,62 @@ function Avatar() {
   )
 }
 
-function Info({ nickname, publicTag }: { nickname: string; publicTag: string }) {
+function Info({ pet }: { pet: PetSearchItem }) {
   return (
     <div className="min-w-0 flex-1">
-      <p className="truncate font-semibold">{nickname}</p>
-      <p className="truncate text-[14px] text-muted-foreground">{publicTag}</p>
+      <p className="flex items-center gap-1.5 font-semibold">
+        <span className="truncate">{pet.nickname}</span>
+        {pet.verified && (
+          <SealCheck
+            size={15}
+            weight="fill"
+            className="shrink-0 text-primary-strong"
+            aria-label="인증된 펫"
+          />
+        )}
+      </p>
+      <p className="truncate text-[14px] text-muted-foreground">
+        {pet.publicTag}
+      </p>
     </div>
   )
 }
 
-const PLACEHOLDER_FRIENDS = [
-  { petId: 2, nickname: '봉이', publicTag: '봉이#B3X9' },
-  { petId: 3, nickname: '초록', publicTag: '초록#C1D4' },
-]
-const PLACEHOLDER_RECEIVED = [
-  { requestId: 1, nickname: '하양', publicTag: '하양#E5F1' },
-]
-const PLACEHOLDER_SENT = [
-  { requestId: 2, nickname: '노랑', publicTag: '노랑#F2A8' },
-]
+function ListSkeleton() {
+  return (
+    <ul className="flex flex-col gap-2" aria-busy="true">
+      {[0, 1, 2].map((i) => (
+        <li
+          key={i}
+          className="h-[76px] rounded-xl border border-border bg-surface"
+        />
+      ))}
+    </ul>
+  )
+}
+
+/** 커서 페이지네이션은 아직 붙이지 않았다. 다음 장이 있다는 사실만 알린다. */
+function MoreHint() {
+  return (
+    <p className="mt-4 text-center text-[13px] text-muted-foreground">
+      더 있습니다. 다음 장 불러오기는 아직 구현 전입니다.
+    </p>
+  )
+}
+
+function ActionError({ error }: { error: unknown }) {
+  if (!error) return null
+  return (
+    <p role="alert" className="mt-3 text-[14px] text-destructive">
+      {toActionMessage(error)}
+    </p>
+  )
+}
+
+function toActionMessage(e: unknown): string {
+  if (!(e instanceof ApiError)) return '요청을 처리하지 못했습니다.'
+  if (e.status === 404) return '이미 처리되었거나 없는 요청입니다.'
+  if (e.status === 409) return '이미 친구이거나 상태가 바뀐 요청입니다.'
+  if (e.status === 403) return '대표 강아지를 지정해야 처리할 수 있습니다.'
+  return '요청을 처리하지 못했습니다.'
+}
