@@ -93,6 +93,17 @@ export function ChatRoomPage() {
   })
 
   const canDraft = useMemo(() => canDraftMeeting(messages), [messages])
+  const draftSourceVersion = useMemo(
+    () =>
+      messages.reduce(
+        (latest, message) =>
+          message.type === 'TEXT' && message.senderType === 'PET'
+            ? Math.max(latest, message.messageId)
+            : latest,
+        0,
+      ),
+    [messages],
+  )
 
   if (!valid) return <Centered>잘못된 채팅방입니다.</Centered>
   if (room.isPending) return <Centered>불러오는 중…</Centered>
@@ -171,7 +182,11 @@ export function ChatRoomPage() {
 
       <div className="sticky bottom-0 border-t border-border bg-surface">
         {/* AI 약속 제안. 입력창 바로 위, 가로 스크롤. 닫을 수 있다. */}
-        <MeetingSuggestions roomId={roomIdNum} enabled={canDraft && !blocked} />
+        <MeetingSuggestions
+          roomId={roomIdNum}
+          enabled={canDraft && !blocked}
+          sourceVersion={draftSourceVersion}
+        />
 
         <div className="p-3">
         {blocked && (

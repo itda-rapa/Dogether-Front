@@ -106,7 +106,9 @@ function SetlogCard({
           if (!reduced) void v.play().catch(() => {})
         } else {
           v.pause()
-          v.preload = 'none'
+          // 'none'으로 내리면 이미 읽은 메타데이터(가로세로 비율)도 날아가
+          // h-auto 크기가 브라우저 기본값(150px)으로 무너진다. 'metadata'까지만 내린다.
+          v.preload = 'metadata'
         }
       },
       /*
@@ -123,7 +125,7 @@ function SetlogCard({
   return (
     <article className="overflow-hidden rounded-xl border border-border bg-surface">
       {/*
-        9:16 세로가 정본이다 — 셋로그는 쇼츠·릴스 방식이다.
+        피드 카드는 16:9 가로다.
         aspect-ratio 를 미리 고정해 영상이 늦게 로드돼도 레이아웃이 밀리지 않게 한다.
         mediaUrl 은 Presigned URL 이라 만료되면 목록을 다시 받아야 한다.
       */}
@@ -131,8 +133,12 @@ function SetlogCard({
         type="button"
         onClick={onOpen}
         aria-label={`${setlog.authorPet.nickname} 셋로그 전체화면으로 보기`}
-        className="relative block aspect-[9/16] w-full bg-muted"
+        className="relative block aspect-video w-full overflow-hidden bg-muted"
       >
+        {/*
+          여백 없이 9:16 박스를 항상 꽉 채운다. 원본 비율이 안 맞으면
+          object-cover 가 넘치는 축을 잘라낸다(이 데모 영상은 좌우가 잘림).
+        */}
         <video
           ref={videoRef}
           src={setlog.mediaUrl}
@@ -140,7 +146,7 @@ function SetlogCard({
           muted
           loop
           playsInline
-          preload="none"
+          preload="metadata"
           tabIndex={-1}
           className="size-full object-cover"
         />
@@ -270,7 +276,7 @@ function FeedSkeleton() {
           key={i}
           className="overflow-hidden rounded-xl border border-border bg-surface"
         >
-          <div className="aspect-[9/16] w-full bg-muted" />
+          <div className="aspect-video w-full bg-muted" />
           <div className="h-16" />
         </li>
       ))}
