@@ -55,7 +55,7 @@ export function HomePage() {
         />
       )}
 
-      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-5">
+      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
         {items.map((s, i) => (
           <li key={s.setlogId}>
             <SetlogCard
@@ -282,7 +282,7 @@ function ReactionButton({
 
 function FeedSkeleton() {
   return (
-    <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-5" aria-busy="true">
+    <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5" aria-busy="true">
       {[0, 1].map((i) => (
         <li
           key={i}
