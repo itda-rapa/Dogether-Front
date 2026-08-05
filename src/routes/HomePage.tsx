@@ -129,66 +129,71 @@ function SetlogCard({
         aspect-ratio 를 미리 고정해 영상이 늦게 로드돼도 레이아웃이 밀리지 않게 한다.
         mediaUrl 은 Presigned URL 이라 만료되면 목록을 다시 받아야 한다.
       */}
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`${setlog.authorPet.nickname} 셋로그 전체화면으로 보기`}
-        className="relative block aspect-video w-full overflow-hidden bg-muted"
-      >
-        {/*
-          여백 없이 9:16 박스를 항상 꽉 채운다. 원본 비율이 안 맞으면
-          object-cover 가 넘치는 축을 잘라낸다(이 데모 영상은 좌우가 잘림).
-        */}
-        <video
-          ref={videoRef}
-          src={setlog.mediaUrl}
-          // 자동재생은 muted 가 없으면 브라우저가 막는다.
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          tabIndex={-1}
-          className="size-full object-cover"
-        />
-      </button>
+      <div className="relative">
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`${setlog.authorPet.nickname} 셋로그 전체화면으로 보기`}
+          className="relative block aspect-video w-full overflow-hidden bg-muted"
+        >
+          {/*
+            여백 없이 9:16 박스를 항상 꽉 채운다. 원본 비율이 안 맞으면
+            object-cover 가 넘치는 축을 잘라낸다(이 데모 영상은 좌우가 잘림).
+          */}
+          <video
+            ref={videoRef}
+            src={setlog.mediaUrl}
+            // 자동재생은 muted 가 없으면 브라우저가 막는다.
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            tabIndex={-1}
+            className="size-full object-cover"
+          />
+        </button>
 
-      <div className="flex items-center gap-3 p-4">
         {/*
-          작성자를 누르면 프로필로 간다. 공개 펫 조회 API 가 없어서
-          이미 들고 있는 authorPet 을 state 로 넘긴다.
+          작성자 칩은 영상 위 오버레이다. 배경 없이 완전히 투명하게 두고
+          그림자로만 가독성을 확보해 영상을 가리지 않는다. 버튼(onOpen) 위에
+          z-10 로 얹혀 있어서, 이 칩을 누르면 뷰어가 아니라 펫 프로필로 간다.
+          공개 펫 조회 API 가 없어서 이미 들고 있는 authorPet 을 state 로 넘긴다.
         */}
         <Link
           to={`/pets/${setlog.authorPet.petId}`}
           state={{ pet: setlog.authorPet }}
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-lg transition-colors hover:bg-primary-subtle"
+          className="absolute left-2 top-2 z-10 flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5"
         >
-          <div aria-hidden className="size-9 shrink-0 rounded-full bg-muted" />
-          <div className="min-w-0 flex-1">
-            <p className="flex items-center gap-1.5 font-semibold">
+          <div
+            aria-hidden
+            className="size-6 shrink-0 rounded-full bg-muted [box-shadow:0_0_0_1px_rgb(0_0_0_/_0.4)]"
+          />
+          <div className="min-w-0 leading-tight [text-shadow:0_1px_3px_rgb(0_0_0_/_0.9),0_0_2px_rgb(0_0_0_/_0.9)]">
+            <p className="flex items-center gap-1 truncate text-[13px] font-semibold text-white">
               <span className="truncate">{setlog.authorPet.nickname}</span>
               {setlog.authorPet.verified && (
-                <SealCheck
-                  size={15}
-                  weight="fill"
-                  className="shrink-0 text-primary-strong"
-                  aria-label="인증된 펫"
-                />
+                <SealCheck size={13} weight="fill" className="shrink-0" aria-label="인증된 펫" />
               )}
             </p>
-            <p className="truncate text-[14px] text-muted-foreground">
+            <p className="truncate text-[11px] text-white">
               {setlog.authorPet.publicTag}
             </p>
           </div>
         </Link>
 
-        {/* 셋로그 신고는 M1 범위가 아니라 차단만 노출된다(roomId 를 넘기지 않음). */}
-        <ModerationMenu
-          targetPetId={setlog.authorPet.petId}
-          targetName={setlog.authorPet.nickname}
-        />
+        {/*
+          캡션은 영상 중앙에 흰 글자로만 얹는다. 배경 박스 없이 완전히 투명하게
+          두고, 그림자로만 가독성을 확보한다. pointer-events-none 이라 클릭은
+          뒤의 onOpen 버튼으로 그대로 전달된다.
+        */}
+        {setlog.caption && (
+          <div className="pointer-events-none absolute inset-x-4 top-1/2 z-10 -translate-y-1/2 text-center">
+            <span className="text-xl font-bold leading-relaxed text-white [text-shadow:0_1px_4px_rgb(0_0_0_/_0.9),0_0_3px_rgb(0_0_0_/_0.9)]">
+              {setlog.caption}
+            </span>
+          </div>
+        )}
       </div>
-
-      {setlog.caption && <p className="px-4 pb-3">{setlog.caption}</p>}
 
       <div className="flex items-center gap-1 border-t border-border px-2 py-1">
         {/* CUTE 와 LIKE 는 배타적이지 않다. 각각 독립 토글이다. */}
@@ -216,6 +221,12 @@ function SetlogCard({
           <HandWaving size={20} weight="fill" />
           {greet.isPending ? '보내는 중…' : '인사하기'}
         </button>
+
+        {/* 셋로그 신고는 M1 범위가 아니라 차단만 노출된다(roomId 를 넘기지 않음). */}
+        <ModerationMenu
+          targetPetId={setlog.authorPet.petId}
+          targetName={setlog.authorPet.nickname}
+        />
       </div>
 
       {greetError && (

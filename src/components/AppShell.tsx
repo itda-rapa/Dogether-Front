@@ -164,7 +164,9 @@ function IconButton({
 function Sidebar() {
   return (
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 border-r border-border bg-surface px-3 py-4 md:block">
-      <div className="px-3 pb-6 text-xl font-bold text-primary-strong">Dogether</div>
+      <Link to="/" className="block px-3 pb-6 text-xl font-bold text-primary-strong">
+        Dogether
+      </Link>
 
       {/* 하단 탭바와 동시에 DOM 에 존재하므로 landmark 라벨을 구분한다 */}
       <nav aria-label="주요 메뉴 (사이드바)">
