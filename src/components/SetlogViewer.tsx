@@ -197,6 +197,7 @@ function ViewerItem({
           <ModerationMenu
             targetPetId={setlog.authorPet.petId}
             targetName={setlog.authorPet.nickname}
+            dropdownDirection="up"
           />
         </div>
       </div>
