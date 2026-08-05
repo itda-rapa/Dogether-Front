@@ -55,7 +55,7 @@ export function HomePage() {
         />
       )}
 
-      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5">
+      <ul className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3 xl:gap-5">
         {items.map((s, i) => (
           <li key={s.setlogId}>
             <SetlogCard
@@ -184,13 +184,15 @@ function SetlogCard({
         {/*
           캡션은 영상 중앙에 흰 글자로만 얹는다. 배경 박스 없이 완전히 투명하게
           두고, 그림자로만 가독성을 확보한다. pointer-events-none 이라 클릭은
-          뒤의 onOpen 버튼으로 그대로 전달된다.
+          뒤의 onOpen 버튼으로 그대로 전달된다. article 의 overflow-hidden 은
+          카드 전체(영상+하단 바) 기준이라, 캡션이 아주 길면 영상 높이를 넘어
+          하단 버튼줄과 겹칠 수 있어 line-clamp 로 최대 줄 수를 막아 둔다.
         */}
         {setlog.caption && (
           <div className="pointer-events-none absolute inset-x-4 top-1/2 z-10 -translate-y-1/2 text-center">
-            <span className="text-xl font-bold leading-relaxed text-white [text-shadow:0_1px_4px_rgb(0_0_0_/_0.9),0_0_3px_rgb(0_0_0_/_0.9)]">
+            <p className="line-clamp-3 text-xl font-bold leading-relaxed text-white [text-shadow:0_1px_4px_rgb(0_0_0_/_0.9),0_0_3px_rgb(0_0_0_/_0.9)]">
               {setlog.caption}
-            </span>
+            </p>
           </div>
         )}
       </div>
@@ -282,7 +284,7 @@ function ReactionButton({
 
 function FeedSkeleton() {
   return (
-    <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-5" aria-busy="true">
+    <ul className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3 xl:gap-5" aria-busy="true">
       {[0, 1].map((i) => (
         <li
           key={i}
