@@ -34,7 +34,7 @@ export function HomePage() {
     setOverrides((prev) => ({ ...prev, [next.setlogId]: next }))
 
   return (
-    <Page title="우리 동네 셋로그" description="동네 강아지들의 3~5초 영상">
+    <Page title="우리 동네 셋로그" description="동네 강아지들의 3~5초 영상" wide>
       {setlogs.isPending && <FeedSkeleton />}
 
       {setlogs.isError && (
@@ -55,7 +55,7 @@ export function HomePage() {
         />
       )}
 
-      <ul className="flex flex-col gap-4">
+      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-5">
         {items.map((s, i) => (
           <li key={s.setlogId}>
             <SetlogCard
@@ -216,9 +216,9 @@ function SetlogCard({
           type="button"
           onClick={() => greet.mutate()}
           disabled={!interactive || greet.isPending}
-          className="ml-auto inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 font-semibold text-primary-strong transition-colors hover:bg-primary-subtle disabled:opacity-50"
+          className="ml-auto inline-flex min-h-11 items-center gap-1 whitespace-nowrap rounded-lg px-2 font-semibold text-primary-strong transition-colors hover:bg-primary-subtle disabled:opacity-50"
         >
-          <HandWaving size={20} weight="fill" />
+          <HandWaving size={18} weight="fill" className="shrink-0" />
           {greet.isPending ? '보내는 중…' : '인사하기'}
         </button>
 
@@ -226,6 +226,7 @@ function SetlogCard({
         <ModerationMenu
           targetPetId={setlog.authorPet.petId}
           targetName={setlog.authorPet.nickname}
+          dropdownDirection="up"
         />
       </div>
 
@@ -261,11 +262,11 @@ function ReactionButton({
       aria-label={active ? `${label} 취소` : label}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 transition-colors hover:bg-primary-subtle disabled:opacity-50"
+      className="inline-flex min-h-11 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 transition-colors hover:bg-primary-subtle disabled:opacity-50"
     >
       {/* 색만으로 상태를 알리지 않는다. 외곽선↔채움 형태도 함께 바뀐다. */}
       <Icon
-        size={20}
+        size={18}
         weight={active ? 'fill' : 'regular'}
         className={cn(
           'transition-colors duration-200',
@@ -281,7 +282,7 @@ function ReactionButton({
 
 function FeedSkeleton() {
   return (
-    <ul className="flex flex-col gap-4" aria-busy="true">
+    <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xl:gap-5" aria-busy="true">
       {[0, 1].map((i) => (
         <li
           key={i}
