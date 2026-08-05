@@ -1,0 +1,29 @@
+name: itda-front
+services:
+  webserver:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: hour-webserver
+    ports:
+      - "80:80"
+      - "443:443"
+      - "81:81"
+    depends_on:
+      - frontend
+    networks:
+      - hour-network
+    volumes:
+      - lb_data:/data
+      - lb_data:/etc/letsencrypt
+      # restart: unless-stopped
+  frontend:
+    image: ghcr.io/itda-rapa/dogether-front:latest
+    expose:
+      - "80"
+    restart: unless-stopped
+    networks:
+      - hour-network
+networks:
+  hour-network:
+    driver: bridge
+volumes:
+  lb_data:

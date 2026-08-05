@@ -58,3 +58,13 @@ jobs:
           push: true
           # Step 6의 with에 정의한 산출물 : tags로서 설정
           tags: ${{ steps.meta.outputs.tags }}
+  deploy:
+    runs-on: self-hosted
+    needs: build-push-image
+    steps:
+      - name: 배포
+        run: |
+          cd /home/ubuntu
+          sudo docker compose down
+          sudo docker compose pull
+          sudo docker compose up -d
