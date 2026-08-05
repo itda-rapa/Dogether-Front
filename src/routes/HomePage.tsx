@@ -1,18 +1,16 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Heart, Smiley, HandWaving, Play, SealCheck } from '@phosphor-icons/react'
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router'
+import { useQuery } from '@tanstack/react-query'
+import { Heart, Smiley, HandWaving, SealCheck } from '@phosphor-icons/react'
 import { Page } from '@/components/ui/Page'
 import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ModerationMenu } from '@/components/ModerationMenu'
-import { listSetlogs, addReaction, removeReaction, sendGreeting } from '@/features/setlog/api'
-import {
-  applyReaction,
-  type ReactionType,
-  type Setlog,
-} from '@/features/setlog/types'
-import { ApiError } from '@/lib/api'
+import { SetlogViewer } from '@/components/SetlogViewer'
+import { listSetlogs } from '@/features/setlog/api'
+import { useSetlogActions } from '@/features/setlog/useSetlogActions'
+import { REACTION_LABEL, type ReactionType, type Setlog } from '@/features/setlog/types'
+import { usePrefersReducedMotion } from '@/lib/usePrefersReducedMotion'
 import { cn } from '@/lib/cn'
 
 export function HomePage() {
@@ -24,11 +22,19 @@ export function HomePage() {
     staleTime: 60_000,
   })
 
+  /*
+    반응·인사로 바뀐 값은 여기 모아 둔다. 피드 카드와 전체화면 뷰어가 같은
+    셋로그를 각각 그리므로, 카드에서 누른 하트가 뷰어에서도 눌려 있어야 한다.
+  */
+  const [overrides, setOverrides] = useState<Record<number, Setlog>>({})
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null)
+
+  const items = (setlogs.data ?? []).map((s) => overrides[s.setlogId] ?? s)
+  const update = (next: Setlog) =>
+    setOverrides((prev) => ({ ...prev, [next.setlogId]: next }))
+
   return (
-    <Page
-      title="우리 동네 셋로그"
-      description="동네 강아지들의 3~5초 영상"
-    >
+    <Page title="우리 동네 셋로그" description="동네 강아지들의 3~5초 영상" wide>
       {setlogs.isPending && <FeedSkeleton />}
 
       {setlogs.isError && (
@@ -42,146 +48,188 @@ export function HomePage() {
       )}
 
       {/* API 는 성공했지만 데이터가 비어 있는 경우. 에러가 아니므로 별도로 안내한다. */}
-      {setlogs.isSuccess && setlogs.data.length === 0 && (
+      {setlogs.isSuccess && items.length === 0 && (
         <EmptyState
           title="아직 올라온 셋로그가 없습니다"
           description="동네 강아지들의 영상이 올라오면 여기에 보여요."
         />
       )}
 
-      <ul className="flex flex-col gap-4">
-        {(setlogs.data ?? []).map((s) => (
+      <ul className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3 xl:gap-5">
+        {items.map((s, i) => (
           <li key={s.setlogId}>
-            <SetlogCard setlog={s} live={Boolean(setlogs.data)} />
+            <SetlogCard
+              setlog={s}
+              onChange={update}
+              onOpen={() => setViewerIndex(i)}
+            />
           </li>
         ))}
       </ul>
+
+      {viewerIndex !== null && (
+        <SetlogViewer
+          items={items}
+          startIndex={viewerIndex}
+          onChangeItem={update}
+          onClose={() => setViewerIndex(null)}
+        />
+      )}
     </Page>
   )
 }
 
-function SetlogCard({ setlog, live }: { setlog: Setlog; live: boolean }) {
-  const queryClient = useQueryClient()
-  const navigate = useNavigate()
-  const [local, setLocal] = useState(setlog)
-  const [greetError, setGreetError] = useState<string | null>(null)
+function SetlogCard({
+  setlog,
+  onChange,
+  onOpen,
+}: {
+  setlog: Setlog
+  onChange: (next: Setlog) => void
+  onOpen: () => void
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const reduced = usePrefersReducedMotion()
+  const { interactive, toggle, greet, greetError } = useSetlogActions(
+    setlog,
+    onChange,
+  )
 
-  // 자기 영상이거나 L1 이면 상호작용 자체가 막힌다.
-  const interactive = local.canInteract !== false
-
-  const react = useMutation({
-    mutationFn: ({ type, next }: { type: ReactionType; next: boolean }) =>
-      next ? addReaction(local.setlogId, type) : removeReaction(local.setlogId, type),
-    onSuccess: (res) => {
-      // 서버가 준 카운트를 정본으로 삼는다.
-      setLocal((prev) => ({
-        ...prev,
-        cuteCount: res.cuteCount,
-        likeCount: res.likeCount,
-        myReactions: res.reacted
-          ? Array.from(new Set([...prev.myReactions, res.type]))
-          : prev.myReactions.filter((r) => r !== res.type),
-      }))
-    },
-    onError: (_e, vars) => {
-      // 낙관적 갱신을 되돌린다.
-      setLocal((prev) => applyReaction(prev, vars.type, !vars.next))
-    },
-  })
-
-  const toggle = (type: ReactionType) => {
-    if (!interactive || !live) return
-    const next = !local.myReactions.includes(type)
-    setLocal((prev) => applyReaction(prev, type, next)) // 낙관적 갱신
-    react.mutate({ type, next })
-  }
-
-  const greet = useMutation({
-    mutationFn: () => sendGreeting(local.setlogId),
-    onSuccess: (res) => {
-      void queryClient.invalidateQueries({ queryKey: ['chat', 'rooms'] })
-      navigate(`/chat/${res.roomId}`)
-    },
-    onError: (e) => setGreetError(toGreetMessage(e)),
-  })
+  // 피드에서도 보이는 것만 재생한다. 전부 재생하면 스크롤이 버벅인다.
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v) return
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          v.preload = 'auto'
+          if (!reduced) void v.play().catch(() => {})
+        } else {
+          v.pause()
+          // 'none'으로 내리면 이미 읽은 메타데이터(가로세로 비율)도 날아가
+          // h-auto 크기가 브라우저 기본값(150px)으로 무너진다. 'metadata'까지만 내린다.
+          v.preload = 'metadata'
+        }
+      },
+      /*
+        9:16 카드는 뷰포트보다 크다. 720px 화면에서 1305px 카드면 최대
+        교차 비율이 0.55 라 threshold 0.5 는 아슬아슬하고, 더 낮은 화면에서는
+        아예 발화하지 않는다. 카드가 절반쯤 들어오면 재생하도록 낮춰 잡는다.
+      */
+      { threshold: 0.25 },
+    )
+    io.observe(v)
+    return () => io.disconnect()
+  }, [reduced])
 
   return (
     <article className="overflow-hidden rounded-xl border border-border bg-surface">
       {/*
+        피드 카드는 16:9 가로다.
         aspect-ratio 를 미리 고정해 영상이 늦게 로드돼도 레이아웃이 밀리지 않게 한다.
         mediaUrl 은 Presigned URL 이라 만료되면 목록을 다시 받아야 한다.
       */}
-      <div className="relative aspect-[4/5] w-full bg-muted">
-        {live && local.mediaUrl ? (
+      <div className="relative">
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`${setlog.authorPet.nickname} 셋로그 전체화면으로 보기`}
+          className="relative block aspect-video w-full overflow-hidden bg-muted"
+        >
+          {/*
+            여백 없이 9:16 박스를 항상 꽉 채운다. 원본 비율이 안 맞으면
+            object-cover 가 넘치는 축을 잘라낸다(이 데모 영상은 좌우가 잘림).
+          */}
           <video
-            src={local.mediaUrl}
-            poster={undefined}
-            controls
+            ref={videoRef}
+            src={setlog.mediaUrl}
+            // 자동재생은 muted 가 없으면 브라우저가 막는다.
+            muted
+            loop
             playsInline
             preload="metadata"
+            tabIndex={-1}
             className="size-full object-cover"
           />
-        ) : (
-          <div className="absolute inset-0 grid place-items-center text-muted-foreground">
-            <Play size={40} weight="fill" />
+        </button>
+
+        {/*
+          작성자 칩은 영상 위 오버레이다. 배경 없이 완전히 투명하게 두고
+          그림자로만 가독성을 확보해 영상을 가리지 않는다. 버튼(onOpen) 위에
+          z-10 로 얹혀 있어서, 이 칩을 누르면 뷰어가 아니라 펫 프로필로 간다.
+          공개 펫 조회 API 가 없어서 이미 들고 있는 authorPet 을 state 로 넘긴다.
+        */}
+        <Link
+          to={`/pets/${setlog.authorPet.petId}`}
+          state={{ pet: setlog.authorPet }}
+          className="absolute left-2 top-2 z-10 flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5"
+        >
+          <div
+            aria-hidden
+            className="size-6 shrink-0 rounded-full bg-muted [box-shadow:0_0_0_1px_rgb(0_0_0_/_0.4)]"
+          />
+          <div className="min-w-0 leading-tight [text-shadow:0_1px_3px_rgb(0_0_0_/_0.9),0_0_2px_rgb(0_0_0_/_0.9)]">
+            <p className="flex items-center gap-1 truncate text-[13px] font-semibold text-white">
+              <span className="truncate">{setlog.authorPet.nickname}</span>
+              {setlog.authorPet.verified && (
+                <SealCheck size={13} weight="fill" className="shrink-0" aria-label="인증된 펫" />
+              )}
+            </p>
+            <p className="truncate text-[11px] text-white">
+              {setlog.authorPet.publicTag}
+            </p>
+          </div>
+        </Link>
+
+        {/*
+          캡션은 영상 중앙에 흰 글자로만 얹는다. 배경 박스 없이 완전히 투명하게
+          두고, 그림자로만 가독성을 확보한다. pointer-events-none 이라 클릭은
+          뒤의 onOpen 버튼으로 그대로 전달된다. article 의 overflow-hidden 은
+          카드 전체(영상+하단 바) 기준이라, 캡션이 아주 길면 영상 높이를 넘어
+          하단 버튼줄과 겹칠 수 있어 line-clamp 로 최대 줄 수를 막아 둔다.
+        */}
+        {setlog.caption && (
+          <div className="pointer-events-none absolute inset-x-4 top-1/2 z-10 -translate-y-1/2 text-center">
+            <p className="line-clamp-3 text-xl font-bold leading-relaxed text-white [text-shadow:0_1px_4px_rgb(0_0_0_/_0.9),0_0_3px_rgb(0_0_0_/_0.9)]">
+              {setlog.caption}
+            </p>
           </div>
         )}
       </div>
-
-      <div className="flex items-center gap-3 p-4">
-        <div aria-hidden className="size-9 shrink-0 rounded-full bg-muted" />
-        <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 font-semibold">
-            <span className="truncate">{local.authorPet.nickname}</span>
-            {local.authorPet.verified && (
-              <SealCheck
-                size={15}
-                weight="fill"
-                className="shrink-0 text-primary-strong"
-                aria-label="인증된 펫"
-              />
-            )}
-          </p>
-          <p className="truncate text-[14px] text-muted-foreground">
-            {local.authorPet.publicTag}
-          </p>
-        </div>
-
-        {/* 셋로그 신고는 M1 범위가 아니라 차단만 노출된다(roomId 를 넘기지 않음). */}
-        <ModerationMenu
-          targetPetId={local.authorPet.petId}
-          targetName={local.authorPet.nickname}
-        />
-      </div>
-
-      {local.caption && <p className="px-4 pb-3">{local.caption}</p>}
 
       <div className="flex items-center gap-1 border-t border-border px-2 py-1">
         {/* CUTE 와 LIKE 는 배타적이지 않다. 각각 독립 토글이다. */}
         <ReactionButton
           type="CUTE"
-          active={local.myReactions.includes('CUTE')}
-          count={local.cuteCount}
-          disabled={!interactive || !live}
+          active={setlog.myReactions.includes('CUTE')}
+          count={setlog.cuteCount}
+          disabled={!interactive}
           onClick={() => toggle('CUTE')}
         />
         <ReactionButton
           type="LIKE"
-          active={local.myReactions.includes('LIKE')}
-          count={local.likeCount}
-          disabled={!interactive || !live}
+          active={setlog.myReactions.includes('LIKE')}
+          count={setlog.likeCount}
+          disabled={!interactive}
           onClick={() => toggle('LIKE')}
         />
 
         <button
           type="button"
           onClick={() => greet.mutate()}
-          disabled={!interactive || !live || greet.isPending}
-          className="ml-auto inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 font-semibold text-primary-strong transition-colors hover:bg-primary-subtle disabled:opacity-50"
+          disabled={!interactive || greet.isPending}
+          className="ml-auto inline-flex min-h-11 items-center gap-1 whitespace-nowrap rounded-lg px-2 font-semibold text-primary-strong transition-colors hover:bg-primary-subtle disabled:opacity-50"
         >
-          <HandWaving size={20} weight="fill" />
+          <HandWaving size={18} weight="fill" className="shrink-0" />
           {greet.isPending ? '보내는 중…' : '인사하기'}
         </button>
+
+        {/* 셋로그 신고는 M1 범위가 아니라 차단만 노출된다(roomId 를 넘기지 않음). */}
+        <ModerationMenu
+          targetPetId={setlog.authorPet.petId}
+          targetName={setlog.authorPet.nickname}
+          dropdownDirection="up"
+        />
       </div>
 
       {greetError && (
@@ -207,7 +255,7 @@ function ReactionButton({
   onClick: () => void
 }) {
   const Icon = type === 'CUTE' ? Smiley : Heart
-  const label = type === 'CUTE' ? '귀여워요' : '좋아요'
+  const label = REACTION_LABEL[type]
 
   return (
     <button
@@ -216,11 +264,11 @@ function ReactionButton({
       aria-label={active ? `${label} 취소` : label}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 transition-colors hover:bg-primary-subtle disabled:opacity-50"
+      className="inline-flex min-h-11 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 transition-colors hover:bg-primary-subtle disabled:opacity-50"
     >
       {/* 색만으로 상태를 알리지 않는다. 외곽선↔채움 형태도 함께 바뀐다. */}
       <Icon
-        size={20}
+        size={18}
         weight={active ? 'fill' : 'regular'}
         className={cn(
           'transition-colors duration-200',
@@ -236,25 +284,16 @@ function ReactionButton({
 
 function FeedSkeleton() {
   return (
-    <ul className="flex flex-col gap-4" aria-busy="true">
+    <ul className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3 xl:gap-5" aria-busy="true">
       {[0, 1].map((i) => (
         <li
           key={i}
           className="overflow-hidden rounded-xl border border-border bg-surface"
         >
-          <div className="aspect-[4/5] w-full bg-muted" />
+          <div className="aspect-video w-full bg-muted" />
           <div className="h-16" />
         </li>
       ))}
     </ul>
   )
-}
-
-function toGreetMessage(e: unknown): string {
-  if (!(e instanceof ApiError)) return '인사를 보내지 못했습니다.'
-  if (e.status === 404) return '셋로그를 찾을 수 없거나 인사할 수 없는 상대입니다.'
-  if (e.status === 429) return '오늘 인사할 수 있는 인원을 모두 사용했습니다. (하루 10명)'
-  if (e.status === 409) return '이미 대화 중인 상대입니다.'
-  if (e.status === 403) return '대표 강아지를 지정해야 인사할 수 있습니다.'
-  return '인사를 보내지 못했습니다.'
 }

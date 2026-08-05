@@ -1,8 +1,11 @@
 import { Link, NavLink, Outlet } from 'react-router'
+import { useQuery } from '@tanstack/react-query'
 import { List, MagnifyingGlass, Bell, Sun, Moon } from '@phosphor-icons/react'
 import { NAV_ITEMS } from '@/app/navigation'
 import { useTheme } from '@/app/theme-context'
 import { useAuth } from '@/features/auth/auth-context'
+import { listMyPets } from '@/features/pet/api'
+import { listNeighborhoods } from '@/features/auth/api'
 import { cn } from '@/lib/cn'
 
 /**
@@ -41,9 +44,38 @@ function Header() {
   const { theme, toggle } = useTheme()
   const { me } = useAuth()
 
+  const pets = useQuery({
+    queryKey: ['pets', 'me'],
+    queryFn: listMyPets,
+    enabled: !!me,
+  })
+  const neighborhoods = useQuery({
+    queryKey: ['neighborhoods'],
+    queryFn: listNeighborhoods,
+    enabled: !!me,
+  })
+
+  const hasActivePet = me?.activePetId != null
+  const activePetNickname = pets.data?.find(
+    (pet) => pet.petId === me?.activePetId,
+  )?.nickname
+  // 대표 펫이 없으면 등록을 유도한다. pets 로딩 중엔 사람 닉네임으로 잠깐 대체해 깜빡임을 줄인다.
+  const profileLabel = !me
+    ? '내 프로필'
+    : !hasActivePet
+      ? '펫 등록하기'
+      : (activePetNickname ?? me.nickname)
+
+  const neighborhood = neighborhoods.data?.find(
+    (n) => n.code === me?.neighborhoodCode,
+  )
+  const neighborhoodLabel =
+    neighborhood &&
+    (neighborhood.eupmyeondongName ?? neighborhood.sigunguName ?? neighborhood.sidoName)
+
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-surface/95 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-4">
+      <div className="flex h-14 items-center gap-2 px-4">
         <button
           type="button"
           aria-label="메뉴 열기"
@@ -52,16 +84,17 @@ function Header() {
           <List size={22} />
         </button>
 
-        {/* 프로필을 누르면 마이 페이지로. Figma 의 프로필 메뉴 진입점이다. */}
-        <Link to="/me" className="flex min-w-0 items-center gap-2">
+        {/* 프로필을 누르면 마이 페이지로. 대표 펫이 없으면 등록 화면으로 바로 보낸다. */}
+        <Link
+          to={me && !hasActivePet ? '/me/pets/new' : '/me'}
+          className="flex min-w-0 items-center gap-2"
+        >
           <div aria-hidden className="size-9 shrink-0 rounded-full bg-muted" />
-          <span className="truncate font-semibold">
-            {me?.nickname ?? '내 프로필'}
-          </span>
-          {/* 동네 코드는 정보성 태그라 솔리드 CTA보다 낮은 위계로 표시한다. */}
+          <span className="truncate font-semibold">{profileLabel}</span>
+          {/* 동네는 정보성 태그라 솔리드 CTA보다 낮은 위계로 표시한다. */}
           {me && (
             <span className="shrink-0 rounded-full bg-primary-subtle px-2.5 py-1 text-[13px] font-medium text-primary-strong">
-              {me.neighborhoodCode}
+              {neighborhoodLabel ?? me.neighborhoodCode}
             </span>
           )}
         </Link>
@@ -131,7 +164,9 @@ function IconButton({
 function Sidebar() {
   return (
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 border-r border-border bg-surface px-3 py-4 md:block">
-      <div className="px-3 pb-6 text-xl font-bold text-primary-strong">Dogether</div>
+      <Link to="/" className="block px-3 pb-6 text-xl font-bold text-primary-strong">
+        Dogether
+      </Link>
 
       {/* 하단 탭바와 동시에 DOM 에 존재하므로 landmark 라벨을 구분한다 */}
       <nav aria-label="주요 메뉴 (사이드바)">

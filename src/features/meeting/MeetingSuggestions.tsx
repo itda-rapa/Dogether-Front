@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { X, Sparkle } from '@phosphor-icons/react'
@@ -21,11 +21,15 @@ import { splitMeetAt, type CardDraft } from './types'
 export function MeetingSuggestions({
   roomId,
   enabled,
+  sourceVersion,
 }: {
   roomId: number
   enabled: boolean
+  /** 최근 24시간 사용자 TEXT 중 가장 최신 messageId. 새 대화가 생기면 재추출한다. */
+  sourceVersion: number
 }) {
   const [dismissed, setDismissed] = useState(false)
+  const lastRequestedSourceVersion = useRef<number | null>(null)
 
   const draft = useQuery({
     // 확인 화면과 같은 키를 쓴다. 카드를 눌러 이동하면 재호출 없이 즉시 뜬다.
@@ -36,6 +40,22 @@ export function MeetingSuggestions({
     staleTime: Infinity,
     refetchOnMount: false,
   })
+  const refetchDraft = draft.refetch
+
+  useEffect(() => {
+    if (!enabled || dismissed) return
+
+    // enabled가 처음 true가 된 렌더에서는 useQuery가 이미 요청한다.
+    if (lastRequestedSourceVersion.current === null) {
+      lastRequestedSourceVersion.current = sourceVersion
+      return
+    }
+
+    if (lastRequestedSourceVersion.current === sourceVersion) return
+
+    lastRequestedSourceVersion.current = sourceVersion
+    void refetchDraft()
+  }, [dismissed, enabled, refetchDraft, sourceVersion])
 
   if (!enabled || dismissed) return null
 

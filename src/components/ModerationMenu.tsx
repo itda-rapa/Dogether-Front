@@ -17,6 +17,11 @@ type Props = {
   /** 차단 대상 펫. 없으면 차단 항목을 숨긴다. */
   targetPetId?: number
   targetName: string
+  /**
+   * 드롭다운이 버튼 아래로 열리면 카드처럼 overflow-hidden 인 조상 안에서
+   * 잘려 보일 수 있는 위치(카드 맨 아래줄 등)에서 'up' 을 준다.
+   */
+  dropdownDirection?: 'down' | 'up'
 }
 
 /**
@@ -25,7 +30,12 @@ type Props = {
  * 차단은 되돌릴 수 없고(M1 에 해제 API 가 없다) 신고는 방 단위라 대상이 서로
  * 다르다. 그래서 둘을 각각 독립적으로 노출한다.
  */
-export function ModerationMenu({ roomId, targetPetId, targetName }: Props) {
+export function ModerationMenu({
+  roomId,
+  targetPetId,
+  targetName,
+  dropdownDirection = 'down',
+}: Props) {
   const [open, setOpen] = useState(false)
   const [sheet, setSheet] = useState<'report' | 'block' | null>(null)
   const ref = useRef<HTMLDivElement | null>(null)
@@ -55,7 +65,10 @@ export function ModerationMenu({ roomId, targetPetId, targetName }: Props) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-12 z-30 w-44 overflow-hidden rounded-xl border border-border bg-surface shadow-md"
+          className={cn(
+            'absolute right-0 z-30 w-44 overflow-hidden rounded-xl border border-border bg-surface shadow-md',
+            dropdownDirection === 'up' ? 'bottom-12' : 'top-12',
+          )}
         >
           {/* 신고는 방 단위라 채팅방에서만 뜬다. */}
           {roomId != null && (
