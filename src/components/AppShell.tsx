@@ -1,8 +1,12 @@
 import { Link, NavLink, Outlet } from 'react-router'
+import { useQuery } from '@tanstack/react-query'
 import { List, MagnifyingGlass, Bell, Sun, Moon } from '@phosphor-icons/react'
 import { NAV_ITEMS } from '@/app/navigation'
 import { useTheme } from '@/app/theme-context'
 import { useAuth } from '@/features/auth/auth-context'
+import { listNeighborhoods } from '@/features/auth/api'
+import { formatNeighborhood } from '@/features/auth/types'
+import { listMyPets } from '@/features/pet/api'
 import { cn } from '@/lib/cn'
 
 /**
@@ -39,11 +43,34 @@ export function AppShell() {
 
 function Header() {
   const { theme, toggle } = useTheme()
-  const { me } = useAuth()
+  const { me, hasSession } = useAuth()
+
+  // 대표 펫 닉네임을 헤더에 보여주기 위한 조회. 마이페이지와 같은 쿼리 키를
+  // 써서 캐시를 공유한다(features/pet/api.ts listMyPets).
+  const pets = useQuery({
+    queryKey: ['pets', 'me'],
+    queryFn: listMyPets,
+    enabled: hasSession,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  // 동네 이름 매핑용. 회원가입 화면과 같은 쿼리 키를 공유한다.
+  const neighborhoods = useQuery({
+    queryKey: ['neighborhoods'],
+    queryFn: listNeighborhoods,
+    staleTime: Infinity,
+  })
+
+  const activePet = pets.data?.find((pet) => pet.petId === me?.activePetId)
+  const neighborhood = neighborhoods.data?.find((n) => n.code === me?.neighborhoodCode)
+  const neighborhoodLabel = neighborhood
+    ? (neighborhood.eupmyeondongName ?? formatNeighborhood(neighborhood))
+    : me?.neighborhoodCode
 
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-surface/95 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-3xl items-center gap-2 px-4">
+      <div className="flex h-14 w-full items-center gap-2 px-4">
         <button
           type="button"
           aria-label="메뉴 열기"
@@ -55,13 +82,14 @@ function Header() {
         {/* 프로필을 누르면 마이 페이지로. Figma 의 프로필 메뉴 진입점이다. */}
         <Link to="/me" className="flex min-w-0 items-center gap-2">
           <div aria-hidden className="size-9 shrink-0 rounded-full bg-muted" />
+          {/* 대표 펫이 없으면(L1) 사용자 닉네임으로 폴백한다. */}
           <span className="truncate font-semibold">
-            {me?.nickname ?? '내 프로필'}
+            {activePet?.nickname ?? me?.nickname ?? '내 프로필'}
           </span>
-          {/* 동네 코드는 정보성 태그라 솔리드 CTA보다 낮은 위계로 표시한다. */}
+          {/* 동네는 코드 대신 이름으로, 정보성 태그라 솔리드 CTA보다 낮은 위계로 표시한다. */}
           {me && (
             <span className="shrink-0 rounded-full bg-primary-subtle px-2.5 py-1 text-[13px] font-medium text-primary-strong">
-              {me.neighborhoodCode}
+              {neighborhoodLabel}
             </span>
           )}
         </Link>
