@@ -14,7 +14,9 @@ import { splitMeetAt, type CardDraft } from './types'
  *
  * 규칙:
  * - 최근 24시간 내 사용자 TEXT 2건 이상일 때만 호출한다 (enabled)
- * - 방당 한 번만 호출한다. AI 호출이라 비싸고 느리다
+ * - AI 호출은 비싸고 느리다. 조건이 됐다고 바로 부르지 않고, 먼저
+ *   "약속을 잡아볼까요?" 로 물어서 사용자가 동의해야 그때 초안을 만든다
+ * - 한 번 동의하면 그 방에서는 다시 묻지 않는다. 이후 새 대화가 생기면 자동 재조회한다
  * - fallback=true(대화 부족·AI 실패)면 아무것도 띄우지 않는다. 상단 버튼이 그 경우를 담당한다
  * - 눌러도 바로 확정하지 않는다. 확인 화면으로 보낸다
  */
@@ -29,13 +31,15 @@ export function MeetingSuggestions({
   sourceVersion: number
 }) {
   const [dismissed, setDismissed] = useState(false)
+  /** "약속을 잡아볼까요?" 에 동의했는지. 이게 true 여야 AI 를 실제로 부른다. */
+  const [confirmed, setConfirmed] = useState(false)
   const lastRequestedSourceVersion = useRef<number | null>(null)
 
   const draft = useQuery({
     // 확인 화면과 같은 키를 쓴다. 카드를 눌러 이동하면 재호출 없이 즉시 뜬다.
     queryKey: ['card-draft', String(roomId)],
     queryFn: () => createCardDraft(roomId),
-    enabled: enabled && !dismissed,
+    enabled: enabled && confirmed && !dismissed,
     retry: false,
     staleTime: Infinity,
     refetchOnMount: false,
@@ -43,7 +47,7 @@ export function MeetingSuggestions({
   const refetchDraft = draft.refetch
 
   useEffect(() => {
-    if (!enabled || dismissed) return
+    if (!enabled || !confirmed || dismissed) return
 
     // enabled가 처음 true가 된 렌더에서는 useQuery가 이미 요청한다.
     if (lastRequestedSourceVersion.current === null) {
@@ -55,9 +59,34 @@ export function MeetingSuggestions({
 
     lastRequestedSourceVersion.current = sourceVersion
     void refetchDraft()
-  }, [dismissed, enabled, refetchDraft, sourceVersion])
+  }, [confirmed, dismissed, enabled, refetchDraft, sourceVersion])
 
   if (!enabled || dismissed) return null
+
+  // 아직 동의 전이다 — AI 를 부르기 전에 먼저 묻는다.
+  if (!confirmed) {
+    return (
+      <Strip onDismiss={() => setDismissed(true)}>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="whitespace-nowrap text-[14px]">약속 카드를 만들어 볼까요?</span>
+          <button
+            type="button"
+            onClick={() => setConfirmed(true)}
+            className="min-h-11 shrink-0 rounded-full bg-primary px-4 font-semibold text-on-primary transition-colors hover:bg-primary-hover"
+          >
+            만들기
+          </button>
+          <button
+            type="button"
+            onClick={() => setDismissed(true)}
+            className="min-h-11 shrink-0 rounded-full border border-border px-4 font-semibold text-muted-foreground transition-colors hover:bg-primary-subtle"
+          >
+            괜찮아요
+          </button>
+        </div>
+      </Strip>
+    )
+  }
 
   // 호출 실패는 조용히 넘어간다. 상단 "약속 잡기" 버튼이 항상 대안으로 있다.
   if (draft.isError) return null

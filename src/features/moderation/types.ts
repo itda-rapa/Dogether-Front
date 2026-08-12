@@ -1,5 +1,7 @@
 /** 차단·신고 관련 타입. 04_M1_OpenAPI.yaml 및 백엔드 DTO 기준. */
 
+import type { ChatMessage } from '@/features/chat/types'
+
 export type Block = {
   blockId: number
   blockedUserId: number
@@ -57,4 +59,56 @@ export type Report = {
   reviewedAt: string | null
   resolutionNote: string | null
   createdAt: string
+}
+
+export type ReportListResult = {
+  items: Report[]
+  page: { page: number; size: number; totalElements: number; totalPages: number }
+}
+
+/**
+ * 신고 상세 증거. 사용자용 `counterpartPet` DTO 와는 다른, 관리자 전용
+ * Evidence DTO 다. 신고자·피신고자 각각의 사용자·펫 정보를 함께 받는다.
+ */
+export type PartyEvidence = {
+  userId: number
+  userPublicTag: string
+  userNickname: string
+  petId: number
+  petPublicTag: string
+  petNickname: string
+}
+
+export type RoomEvidence = {
+  roomId: number
+  status: 'ACTIVE' | 'ARCHIVED'
+  participantPetIds: number[]
+  createdAt: string
+}
+
+/**
+ * 방의 전체 메시지를 시간순으로, 페이지네이션 없이 받는다(계약 명시).
+ * CARD/SYSTEM 도 증거에 포함되고, SYSTEM 은 senderPetId 가 null 이다.
+ */
+export type ReportDetail = {
+  report: Report
+  reporter: PartyEvidence
+  reported: PartyEvidence
+  room: RoomEvidence
+  messages: ChatMessage[]
+}
+
+/** 조치는 2종뿐이다. WARNING → ACTIONED(경고 이력만), DISMISSED → NO_ACTION(반려). */
+export const REPORT_ACTION_TYPES = ['WARNING', 'DISMISSED'] as const
+export type ReportActionType = (typeof REPORT_ACTION_TYPES)[number]
+
+export const REPORT_ACTION_LABEL: Record<ReportActionType, string> = {
+  WARNING: '경고',
+  DISMISSED: '반려',
+}
+
+export type ReportActionBody = {
+  actionType: ReportActionType
+  /** 공백 불가, 1~500자. */
+  reason: string
 }

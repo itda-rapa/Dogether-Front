@@ -1,9 +1,9 @@
 import { apiRequest } from '@/lib/api'
-import type { Greeting, ReactionType, Setlog, SetlogReaction } from './types'
+import type { Greeting, ReactionType, SetlogListResult, SetlogReaction } from './types'
 
-/** M1 은 모든 사용자에게 동일한 시드 영상 3개를 준다. */
+/** M1 은 모든 사용자에게 동일한 시드 영상 3개를 준다. 커서 페이지네이션 응답이다. */
 export function listSetlogs() {
-  return apiRequest<Setlog[]>('/setlogs')
+  return apiRequest<SetlogListResult>('/setlogs')
 }
 
 /** 동일 반응을 다시 추가해도 서버가 멱등 처리한다. */

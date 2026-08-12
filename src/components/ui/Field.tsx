@@ -3,8 +3,10 @@ import { Sparkle } from '@phosphor-icons/react'
 
 type Props = {
   label: string
-  /** AI 가 채운 값이면 사용자가 확인해야 한다는 표시를 붙인다. */
+  /** 값이 자동으로 채워졌으면 사용자가 확인해야 한다는 표시를 붙인다. */
   aiFilled?: boolean
+  /** aiFilled 배지 문구. AI 가 아니라 규칙 계산으로 채운 값이면 재정의한다. 기본값: "AI 추천". */
+  filledLabel?: string
   error?: string
   hint?: string
   children: (props: { id: string; describedBy?: string; invalid: boolean }) => ReactNode
@@ -16,7 +18,7 @@ type Props = {
  * - 라벨은 항상 보이게 둔다. placeholder 로 라벨을 대신하지 않는다.
  * - 에러는 필드 바로 아래에 붙인다. 화면 상단에 몰아넣지 않는다.
  */
-export function Field({ label, aiFilled, error, hint, children }: Props) {
+export function Field({ label, aiFilled, filledLabel = 'AI 추천', error, hint, children }: Props) {
   const id = useId()
   const errorId = `${id}-error`
   const hintId = `${id}-hint`
@@ -33,7 +35,7 @@ export function Field({ label, aiFilled, error, hint, children }: Props) {
         {aiFilled && (
           <span className="inline-flex items-center gap-1 rounded-full bg-primary-subtle px-2 py-0.5 text-[13px] font-medium text-primary-strong">
             <Sparkle size={12} weight="fill" />
-            AI 추천
+            {filledLabel}
           </span>
         )}
       </div>

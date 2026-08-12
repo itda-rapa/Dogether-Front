@@ -20,8 +20,15 @@ import {
   mergeMessages,
   type ChatMessage,
 } from '@/features/chat/types'
+import {
+  detectPlaceKeyword,
+  isPlaceSuggestionSuppressed,
+  suppressPlaceSuggestion,
+} from '@/features/chat/placeSuggestion'
+import { PlaceSuggestionPopup } from '@/features/chat/PlaceSuggestionPopup'
 import { ModerationMenu } from '@/components/ModerationMenu'
 import { MeetingSuggestions } from '@/features/meeting/MeetingSuggestions'
+import { useAuth } from '@/features/auth/auth-context'
 import { ApiError } from '@/lib/api'
 import { cn } from '@/lib/cn'
 
@@ -32,10 +39,15 @@ export function ChatRoomPage() {
   const { roomId = '' } = useParams()
   const roomIdNum = Number(roomId)
   const valid = Number.isFinite(roomIdNum)
+  const { me } = useAuth()
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [sendError, setSendError] = useState<string | null>(null)
+  /** 팝업을 닫은 메시지 id. 폴링이 같은 메시지를 다시 실어와도 다시 뜨지 않게 한다. */
+  const [dismissedPlaceMessageId, setDismissedPlaceMessageId] = useState<
+    number | null
+  >(null)
 
   /** 다음 폴링에 넘길 커서. 렌더와 무관하게 즉시 읽혀야 해서 ref 로 둔다. */
   const afterRef = useRef<number | null>(null)
@@ -105,6 +117,29 @@ export function ChatRoomPage() {
     [messages],
   )
 
+  // 방금 내가 보낸 마지막 메시지에서만 판단한다. 상대가 답장하면 사라진다.
+  const lastMessage = messages[messages.length - 1]
+  const counterpartPetId = room.data?.counterpartPet.petId
+  const placeKeyword =
+    lastMessage &&
+    lastMessage.type === 'TEXT' &&
+    lastMessage.senderType === 'PET' &&
+    lastMessage.senderPetId !== counterpartPetId &&
+    lastMessage.body
+      ? detectPlaceKeyword(lastMessage.body)
+      : null
+
+  const showPlacePopup =
+    placeKeyword != null &&
+    lastMessage.messageId !== dismissedPlaceMessageId &&
+    me != null &&
+    !isPlaceSuggestionSuppressed(roomIdNum, me.userId)
+
+  const dismissPlacePopup = () => {
+    if (lastMessage) setDismissedPlaceMessageId(lastMessage.messageId)
+    if (me) suppressPlaceSuggestion(roomIdNum, me.userId)
+  }
+
   if (!valid) return <Centered>잘못된 채팅방입니다.</Centered>
   if (room.isPending) return <Centered>불러오는 중…</Centered>
   if (room.isError) return <RoomError error={room.error} />
@@ -116,7 +151,17 @@ export function ChatRoomPage() {
     : '지금은 메시지를 보낼 수 없습니다.'
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col">
+    /*
+      메시지가 많아지면 flex-1 만으로는 안 된다 — 조상들이 전부 `min-height`
+      체인이라(shell 의 min-h-dvh 부터) 진짜 상한이 없고, 내용이 많으면 문서
+      전체가 그만큼 늘어나며 스크롤된다. 그 결과 입력창(sticky bottom-0)이
+      페이지 맨 아래로 밀려나 하단 탭바(fixed)와 겹쳐 버린다(스크롤을 올리면
+      입력창이 안 보이던 버그의 원인). 그래서 이 페이지만 `h-[...]`로 진짜
+      높이 상한을 직접 정하고, sticky 로 헤더 바로 아래에 고정한다.
+      3.5rem = 공용 Header 의 h-14, 64px+safe-area = main 의 모바일 탭바 여백과
+      정확히 맞춰야 한다(AppShell.tsx 쪽 값이 바뀌면 여기도 같이 바꿀 것).
+    */
+    <div className="sticky top-14 mx-auto flex h-[calc(100dvh-3.5rem-64px-env(safe-area-inset-bottom))] w-full max-w-3xl flex-col overflow-hidden md:h-[calc(100dvh-3.5rem)]">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <Link
           to="/chat"
@@ -165,7 +210,7 @@ export function ChatRoomPage() {
         )}
       </div>
 
-      <ul className="flex flex-1 flex-col gap-3 p-4">
+      <ul className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
         {messages.length === 0 && !poll.isPending && (
           <li className="py-8 text-center text-muted-foreground">
             첫 메시지를 보내보세요.
@@ -181,6 +226,13 @@ export function ChatRoomPage() {
       </ul>
 
       <div className="sticky bottom-0 border-t border-border bg-surface">
+        {showPlacePopup && placeKeyword && (
+          <PlaceSuggestionPopup
+            keyword={placeKeyword}
+            onDismiss={dismissPlacePopup}
+          />
+        )}
+
         {/* AI 약속 제안. 입력창 바로 위, 가로 스크롤. 닫을 수 있다. */}
         <MeetingSuggestions
           roomId={roomIdNum}

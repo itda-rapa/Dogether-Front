@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, SealCheck, Dog } from '@phosphor-icons/react'
+import { ArrowLeft, PencilSimple, SealCheck, Dog } from '@phosphor-icons/react'
 import { getPet } from '@/features/pet/api'
 import {
   SEX_LABEL,
@@ -47,10 +47,7 @@ export function PetDetailPage() {
   )
 }
 
-/*
-  펫 수정·삭제 화면은 두지 않는다.
-  PATCH /pets/{petId} 와 DELETE /pets/{petId} 가 M1 계약에 없다.
-*/
+// 삭제 화면은 아직 안 만든다. DELETE /pets/{petId} 가 계약에 없다.
 
 function PetDetail({ pet }: { pet: Pet }) {
   const age = ageFrom(pet.birthDate)
@@ -65,7 +62,7 @@ function PetDetail({ pet }: { pet: Pet }) {
         >
           <Dog size={40} />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="flex items-center gap-2 text-2xl font-bold">
             <span className="truncate">{pet.nickname}</span>
             {pet.verified && (
@@ -81,6 +78,13 @@ function PetDetail({ pet }: { pet: Pet }) {
             {pet.publicTag}
           </p>
         </div>
+        <Link
+          to={`/me/pets/${pet.petId}/edit`}
+          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-3 font-semibold text-primary-strong transition-colors hover:bg-primary-subtle"
+        >
+          <PencilSimple size={18} weight="bold" />
+          수정
+        </Link>
       </div>
 
       {pet.bio && <p className="mt-4">{pet.bio}</p>}

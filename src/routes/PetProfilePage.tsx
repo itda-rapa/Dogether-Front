@@ -34,7 +34,7 @@ export function PetProfilePage() {
   })
 
   const found =
-    setlogs.data?.find((s) => s.authorPet.petId === id)?.authorPet ?? null
+    setlogs.data?.items.find((s) => s.authorPet.petId === id)?.authorPet ?? null
   const pet = fromState ?? found
 
   return (

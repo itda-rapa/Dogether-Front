@@ -11,6 +11,13 @@ export const REACTION_LABEL: Record<ReactionType, string> = {
   LIKE: '좋아요',
 }
 
+/** GET /setlogs 응답. 커서 페이지네이션이지만 M1 은 시드 3건이라 사실상 한 페이지다. */
+export type SetlogListResult = {
+  items: Setlog[]
+  nextCursor: string | null
+  hasNext: boolean
+}
+
 export type Setlog = {
   setlogId: number
   authorPet: PetSearchItem

@@ -24,11 +24,13 @@ export function SetlogViewer({
   items,
   startIndex,
   onChangeItem,
+  onHideItem,
   onClose,
 }: {
   items: Setlog[]
   startIndex: number
   onChangeItem: (next: Setlog) => void
+  onHideItem: (setlogId: number) => void
   onClose: () => void
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null)
@@ -100,6 +102,7 @@ export function SetlogViewer({
             key={s.setlogId}
             setlog={s}
             onChange={onChangeItem}
+            onHide={() => onHideItem(s.setlogId)}
             reduced={reduced}
           />
         ))}
@@ -111,10 +114,12 @@ export function SetlogViewer({
 function ViewerItem({
   setlog,
   onChange,
+  onHide,
   reduced,
 }: {
   setlog: Setlog
   onChange: (next: Setlog) => void
+  onHide: () => void
   reduced: boolean
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -161,9 +166,14 @@ function ViewerItem({
         className="size-full object-contain"
       />
 
-      {/* 우측 세로 액션 레일. 세로로 쌓으므로 CUTE·LIKE 를 둘 다 둘 수 있다. */}
+      {/*
+        우측 세로 액션 레일. 세로로 쌓으므로 CUTE·LIKE 를 둘 다 둘 수 있다.
+        z-10 이 없으면 아래 캡션 박스(뒤에 나오는 형제 요소라 기본 스택 순서가 더
+        위)가 레일 하단(...메뉴 버튼)과 겹쳐 클릭을 가로챈다. 캡션이 길어질수록
+        더 위쪽 버튼까지 먹힐 수 있으니 반드시 레일을 위에 둔다.
+      */}
       <div
-        className="absolute bottom-0 right-2 flex flex-col items-center gap-5 pb-6"
+        className="absolute bottom-0 right-2 z-10 flex flex-col items-center gap-5 pb-6"
         style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
       >
         <RailReaction
@@ -195,7 +205,9 @@ function ViewerItem({
 
         <div className="text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
           <ModerationMenu
+            setlogId={setlog.setlogId}
             targetPetId={setlog.authorPet.petId}
+            onHide={onHide}
             targetName={setlog.authorPet.nickname}
             dropdownDirection="up"
           />
