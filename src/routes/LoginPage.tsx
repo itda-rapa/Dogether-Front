@@ -25,6 +25,8 @@ export function LoginPage() {
 
   const from =
     (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/'
+  const passwordResetDone = (location.state as { passwordResetDone?: boolean } | null)
+    ?.passwordResetDone
 
   const { register, handleSubmit, formState } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -46,6 +48,12 @@ export function LoginPage() {
 
   return (
     <AuthLayout title="로그인" subtitle="Dogether에 오신 걸 환영합니다">
+      {passwordResetDone && (
+        <p className="mb-5 rounded-lg border border-border bg-primary-subtle px-4 py-3 text-[14px] text-primary-strong">
+          비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.
+        </p>
+      )}
+
       <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
         <Field label="이메일" error={formState.errors.email?.message}>
           {({ id, describedBy, invalid }) => (
@@ -74,6 +82,13 @@ export function LoginPage() {
             />
           )}
         </Field>
+
+        <Link
+          to="/reset-password"
+          className="self-end text-[13px] font-semibold text-primary-strong"
+        >
+          비밀번호를 잊으셨나요?
+        </Link>
 
         {submitError && (
           <p role="alert" className="text-[14px] text-destructive">

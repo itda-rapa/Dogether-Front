@@ -19,6 +19,9 @@ export function useSetlogActions(
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [greetError, setGreetError] = useState<string | null>(null)
+  // 서버가 "이미 인사함" 여부를 목록에 안 내려주므로, 409 를 받으면 그때부터
+  // 이 화면 안에서만 기억해 둔다(새로고침하면 다시 모른다).
+  const [alreadyGreeted, setAlreadyGreeted] = useState(false)
 
   // 자기 영상이거나 L1 이면 상호작용 자체가 막힌다.
   const interactive = setlog.canInteract !== false
@@ -56,10 +59,13 @@ export function useSetlogActions(
       void queryClient.invalidateQueries({ queryKey: ['chat', 'rooms'] })
       navigate(`/chat/${res.roomId}`)
     },
-    onError: (e) => setGreetError(toGreetMessage(e)),
+    onError: (e) => {
+      setGreetError(toGreetMessage(e))
+      if (e instanceof ApiError && e.status === 409) setAlreadyGreeted(true)
+    },
   })
 
-  return { interactive, toggle, greet, greetError }
+  return { interactive, toggle, greet, greetError, alreadyGreeted }
 }
 
 function toGreetMessage(e: unknown): string {

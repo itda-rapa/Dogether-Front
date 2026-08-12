@@ -102,6 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: string
       nickname: string
       neighborhoodCode: string
+      verificationToken: string
     }) => {
       const tokens = await authApi.signup(input)
       persist(tokens)

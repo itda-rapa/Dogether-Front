@@ -1,26 +1,52 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Dog, MagnifyingGlass } from '@phosphor-icons/react'
+import { useQuery } from '@tanstack/react-query'
+import { Dog, MagnifyingGlass, SealCheck } from '@phosphor-icons/react'
 import { BackLink } from '@/components/ui/BackLink'
 import { Button } from '@/components/ui/Button'
-import { NotConnected } from '@/components/ui/NotConnected'
+import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { inputClass } from '@/components/ui/input-class'
 import { cn } from '@/lib/cn'
+import { useAuth } from '@/features/auth/auth-context'
+import { listFriends } from '@/features/friend/api'
+import { listChatRooms } from '@/features/chat/api'
 
 /**
  * 채팅방 생성.
  *
- * M1 의 DIRECT 방은 인사(GREETING) 또는 친구 관계로만 열린다.
- * 임의로 방을 만드는 API 는 계약에 없으므로, 이 화면은 친구 목록에서 상대를
- * 골라 대화를 시작하는 진입점으로 둔다.
+ * M1 의 DIRECT 방은 인사(GREETING) 또는 친구 관계로만 열린다. 임의로 방을
+ * 만드는 API 는 계약에 없다. 그래서 이 화면은 방을 새로 만들지 않고, 이미
+ * 친구 수락 시점에 만들어진 방을 찾아 이동시키는 역할만 한다. 아직 방이
+ * 없는 친구는 선택은 되지만 이동할 곳이 없다는 안내만 나간다.
  */
 export function ChatNewPage() {
   const navigate = useNavigate()
+  const { me } = useAuth()
+  const petId = me?.activePetId ?? null
+
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<number | null>(null)
 
-  const filtered = PLACEHOLDER_FRIENDS.filter((f) =>
-    f.nickname.includes(query.trim()),
+  const friends = useQuery({
+    queryKey: ['friends', petId],
+    queryFn: () => listFriends(petId as number),
+    enabled: petId !== null,
+    retry: false,
+  })
+
+  const rooms = useQuery({
+    queryKey: ['chat', 'rooms'],
+    queryFn: () => listChatRooms({ limit: 100 }),
+    enabled: petId !== null,
+    retry: false,
+  })
+
+  const items = friends.data?.items ?? []
+  const filtered = items.filter((f) => f.nickname.includes(query.trim()))
+
+  const existingRoom = rooms.data?.items.find(
+    (r) => r.counterpartPet.petId === selected,
   )
 
   return (
@@ -50,54 +76,88 @@ export function ChatNewPage() {
         />
       </div>
 
-      <ul className="mt-4 flex flex-col gap-2">
-        {filtered.map((f) => (
-          <li key={f.petId}>
-            <button
-              type="button"
-              aria-pressed={selected === f.petId}
-              onClick={() => setSelected(f.petId)}
-              className={cn(
-                'flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors',
-                selected === f.petId
-                  ? 'border-primary bg-primary-subtle'
-                  : 'border-border bg-surface hover:bg-primary-subtle',
-              )}
-            >
-              <div
-                aria-hidden
-                className="grid size-11 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground"
-              >
-                <Dog size={22} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">{f.nickname}</p>
-                <p className="truncate text-[14px] text-muted-foreground">
-                  {f.publicTag}
-                </p>
-              </div>
-            </button>
-          </li>
-        ))}
-      </ul>
+      {petId === null ? (
+        <div className="mt-6">
+          <EmptyState
+            title="대표 강아지를 먼저 지정해 주세요"
+            description="채팅은 강아지 단위로 이루어집니다."
+          />
+        </div>
+      ) : friends.isError ? (
+        <div className="mt-6">
+          <ApiErrorNotice
+            error={friends.error}
+            title="친구 목록을 불러오지 못했습니다"
+            onRetry={() => void friends.refetch()}
+          />
+        </div>
+      ) : friends.isPending ? (
+        <ul className="mt-4 flex flex-col gap-2" aria-busy="true">
+          {[0, 1, 2].map((i) => (
+            <li key={i} className="h-[76px] rounded-xl border border-border bg-surface" />
+          ))}
+        </ul>
+      ) : (
+        <>
+          <ul className="mt-4 flex flex-col gap-2">
+            {filtered.map((f) => (
+              <li key={f.petId}>
+                <button
+                  type="button"
+                  aria-pressed={selected === f.petId}
+                  onClick={() => setSelected(f.petId)}
+                  className={cn(
+                    'flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-colors',
+                    selected === f.petId
+                      ? 'border-primary bg-primary-subtle'
+                      : 'border-border bg-surface hover:bg-primary-subtle',
+                  )}
+                >
+                  <div
+                    aria-hidden
+                    className="grid size-11 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground"
+                  >
+                    <Dog size={22} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-1.5 font-semibold">
+                      <span className="truncate">{f.nickname}</span>
+                      {f.verified && (
+                        <SealCheck
+                          size={15}
+                          weight="fill"
+                          className="shrink-0 text-primary-strong"
+                          aria-label="인증된 펫"
+                        />
+                      )}
+                    </p>
+                    <p className="truncate text-[14px] text-muted-foreground">
+                      {f.publicTag}
+                    </p>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
 
-      {filtered.length === 0 && (
-        <p className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
-          검색 결과가 없습니다.
-        </p>
+          {filtered.length === 0 && (
+            <p className="mt-6 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
+              {items.length === 0 ? '아직 친구가 없습니다.' : '검색 결과가 없습니다.'}
+            </p>
+          )}
+
+          {selected !== null && !rooms.isPending && !existingRoom && (
+            <p className="mt-4 text-[13px] text-muted-foreground">
+              이 친구와는 아직 대화방이 없습니다. 셋로그에서 인사를 보내면 방이 만들어집니다.
+            </p>
+          )}
+        </>
       )}
-
-      <div className="mt-8">
-        <NotConnected
-          endpoint="GET /pets/{petId}/friends"
-          note="M1 계약에는 임의로 방을 만드는 API 가 없습니다. 방은 인사(GREETING) 또는 친구 관계로 생성됩니다."
-        />
-      </div>
 
       <div className="mt-6 flex gap-3">
         <Button
-          disabled={selected === null}
-          onClick={() => navigate('/chat')}
+          disabled={selected === null || !existingRoom}
+          onClick={() => existingRoom && navigate(`/chat/${existingRoom.roomId}`)}
         >
           대화 시작
         </Button>
@@ -108,8 +168,3 @@ export function ChatNewPage() {
     </div>
   )
 }
-
-const PLACEHOLDER_FRIENDS = [
-  { petId: 2, nickname: '봉이', publicTag: '봉이#B3X9' },
-  { petId: 3, nickname: '초록', publicTag: '초록#C1D4' },
-]

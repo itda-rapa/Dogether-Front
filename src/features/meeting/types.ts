@@ -12,6 +12,8 @@
  * AI 결과를 자동 확정하지 않는다. 저장은 사용자가 확정 버튼을 눌렀을 때만 한다.
  */
 
+import type { PetSearchItem } from '@/features/chat/types'
+
 export const CARD_TYPES = ['WALK', 'PLAY', 'HOSPITAL', 'OTHER'] as const
 export type CardType = (typeof CARD_TYPES)[number]
 
@@ -62,6 +64,23 @@ export type MeetingCard = {
   canceledByPetId: number | null
   canceledAt: string | null
   createdAt: string
+}
+
+/**
+ * `GET /meeting-cards/me` (목록) 전용 확장.
+ *
+ * ⚠️ 아직 BE 계약(04_M1_OpenAPI.yaml)에 없는 제안 단계 엔드포인트다. M2 단톡 도입으로
+ * 참가자가 상대 1명으로 안 끝나서, 목록에서만이라도 펫 정보를 인라인으로 받기로 했다
+ * (N+1 조회 회피). 단건 조회(getMeetingCard)에는 participants 가 없다.
+ * 자세한 내용은 인수인계 문서(docs/handover/meeting-cards-list-be.md) 참고.
+ */
+export type MeetingCardListItem = MeetingCard & {
+  participants: PetSearchItem[]
+}
+
+export type MeetingCardListResult = {
+  items: MeetingCardListItem[]
+  page: { nextCursor: string | null; hasNext: boolean }
 }
 
 /** 폼에 바인딩되는 형태. meetAt 을 날짜/시간 입력 두 개로 쪼갠다. */

@@ -8,6 +8,7 @@ import { Field } from '@/components/ui/Field'
 import { inputClass } from '@/components/ui/input-class'
 import { Button } from '@/components/ui/Button'
 import { createPet, type PetWriteBody } from '@/features/pet/api'
+import { BreedSizeField } from '@/features/pet/components/BreedSizeField'
 import type { PetSex, PetSize } from '@/features/pet/types'
 import { ApiError } from '@/lib/api'
 import { cn } from '@/lib/cn'
@@ -41,17 +42,11 @@ const SEX = [
   { value: 'UNKNOWN', label: '모름' },
 ]
 
-const SIZE = [
-  { value: 'SMALL', label: '소형견' },
-  { value: 'MEDIUM', label: '중형견' },
-  { value: 'LARGE', label: '대형견' },
-]
-
 export function PetNewPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  const { register, handleSubmit, formState } = useForm<FormValues>({
+  const { register, handleSubmit, formState, watch, setValue } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: 'onTouched',
     defaultValues: { nickname: '', breedName: '', bio: '', careNote: '' },
@@ -98,19 +93,15 @@ export function PetNewPage() {
           )}
         </Field>
 
-        <Field label="품종" error={formState.errors.breedName?.message}>
-          {({ id, describedBy, invalid }) => (
-            <input
-              id={id}
-              type="text"
-              placeholder="예: 푸들"
-              aria-describedby={describedBy}
-              aria-invalid={invalid}
-              className={inputClass(invalid)}
-              {...register('breedName')}
-            />
-          )}
-        </Field>
+        <BreedSizeField
+          breedName={watch('breedName') ?? ''}
+          weightKg={watch('weightKg') ?? ''}
+          sizeCode={watch('sizeCode') ?? ''}
+          onBreedNameChange={(v) => setValue('breedName', v, { shouldValidate: true })}
+          onWeightKgChange={(v) => setValue('weightKg', v)}
+          onSizeCodeChange={(v) => setValue('sizeCode', v)}
+          breedError={formState.errors.breedName?.message}
+        />
 
         <Field label="생일">
           {({ id }) => (
@@ -133,34 +124,6 @@ export function PetNewPage() {
                 </option>
               ))}
             </select>
-          )}
-        </Field>
-
-        <Field label="크기">
-          {({ id }) => (
-            <select id={id} className={inputClass(false)} {...register('sizeCode')}>
-              <option value="">선택 안 함</option>
-              {SIZE.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          )}
-        </Field>
-
-        <Field label="몸무게" hint="kg">
-          {({ id }) => (
-            <input
-              id={id}
-              type="number"
-              step="0.01"
-              min="0"
-              max="999.99"
-              inputMode="decimal"
-              className={inputClass(false)}
-              {...register('weightKg')}
-            />
           )}
         </Field>
 

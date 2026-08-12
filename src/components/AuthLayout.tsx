@@ -13,7 +13,10 @@ export function AuthLayout({
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-4 py-10">
       <div className="mb-8 text-center">
-        <p className="text-2xl font-bold text-primary-strong">Dogether</p>
+        <p className="flex items-center justify-center gap-2 text-2xl font-bold text-primary-strong">
+          <img src="/logo-mark.png" alt="" className="size-9 shrink-0" />
+          Dogether
+        </p>
         <h1 className="mt-6 text-2xl font-bold">{title}</h1>
         <p className="mt-1 text-[14px] text-muted-foreground">{subtitle}</p>
       </div>

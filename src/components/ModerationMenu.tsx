@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { DotsThree, Prohibit, Flag, X } from '@phosphor-icons/react'
-import { createBlock, createReport } from '@/features/moderation/api'
+import { DotsThree, Prohibit, Flag, EyeSlash, X } from '@phosphor-icons/react'
+import { createBlock, createReport, createSetlogReport } from '@/features/moderation/api'
 import { REPORT_REASONS, type ReportReason } from '@/features/moderation/types'
 import { inputClass } from '@/components/ui/input-class'
 import { Button } from '@/components/ui/Button'
 import { ApiError } from '@/lib/api'
 import { cn } from '@/lib/cn'
+
+/**
+ * 셋로그 신고는 백엔드 협의가 끝날 때까지 숨겨둔다.
+ * 협의되면 여기만 true 로 바꾸면 된다 — 메뉴·시트 배선은 이미 돼 있다.
+ */
+const SETLOG_REPORT_ENABLED = false
 
 type Props = {
   /**
@@ -14,8 +20,18 @@ type Props = {
    * 채팅방 화면에서만 넘긴다. 없으면 신고 항목이 뜨지 않는다.
    */
   roomId?: number
+  /**
+   * 신고 대상 셋로그. 계약이 아직 없어 `SETLOG_REPORT_ENABLED` 가 꺼져
+   * 있는 동안은 넘겨도 메뉴에 나타나지 않는다.
+   */
+  setlogId?: number
   /** 차단 대상 펫. 없으면 차단 항목을 숨긴다. */
   targetPetId?: number
+  /**
+   * "이 영상만 내 피드에서 숨기기". 차단/신고와 달리 작성자·서버에 영향이
+   * 없는 로컬 전용 동작이라, 실제 처리는 호출부가 한다. 없으면 항목을 숨긴다.
+   */
+  onHide?: () => void
   targetName: string
   /**
    * 드롭다운이 버튼 아래로 열리면 카드처럼 overflow-hidden 인 조상 안에서
@@ -32,10 +48,13 @@ type Props = {
  */
 export function ModerationMenu({
   roomId,
+  setlogId,
   targetPetId,
+  onHide,
   targetName,
   dropdownDirection = 'down',
 }: Props) {
+  const canReport = roomId != null || (SETLOG_REPORT_ENABLED && setlogId != null)
   const [open, setOpen] = useState(false)
   const [sheet, setSheet] = useState<'report' | 'block' | null>(null)
   const ref = useRef<HTMLDivElement | null>(null)
@@ -70,8 +89,8 @@ export function ModerationMenu({
             dropdownDirection === 'up' ? 'bottom-12' : 'top-12',
           )}
         >
-          {/* 신고는 방 단위라 채팅방에서만 뜬다. */}
-          {roomId != null && (
+          {/* 신고는 방 단위(+ 숨김 처리된 셋로그 단위)만 지원한다. */}
+          {canReport && (
             <button
               type="button"
               role="menuitem"
@@ -100,12 +119,29 @@ export function ModerationMenu({
               차단하기
             </button>
           )}
+
+          {/* 작성자·서버에 영향 없는 로컬 전용 동작. 확인 시트 없이 바로 처리한다. */}
+          {onHide && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                onHide()
+              }}
+              className="flex min-h-11 w-full items-center gap-2 px-4 py-3 text-left transition-colors first:border-t-0 hover:bg-primary-subtle [&:not(:first-child)]:border-t [&:not(:first-child)]:border-border"
+            >
+              <EyeSlash size={18} />
+              숨기기
+            </button>
+          )}
         </div>
       )}
 
-      {sheet === 'report' && roomId != null && (
+      {sheet === 'report' && canReport && (
         <ReportSheet
           roomId={roomId}
+          setlogId={SETLOG_REPORT_ENABLED ? setlogId : undefined}
           targetName={targetName}
           onClose={() => setSheet(null)}
         />
@@ -174,10 +210,12 @@ function Sheet({
 
 function ReportSheet({
   roomId,
+  setlogId,
   targetName,
   onClose,
 }: {
-  roomId: number
+  roomId?: number
+  setlogId?: number
   targetName: string
   onClose: () => void
 }) {
@@ -185,20 +223,24 @@ function ReportSheet({
   const [detail, setDetail] = useState('')
 
   const submit = useMutation({
-    mutationFn: () =>
-      createReport({
-        roomId,
-        reasonCode: reason as ReportReason,
-        detail: detail.trim() || undefined,
-      }),
+    mutationFn: () => {
+      const reasonCode = reason as ReportReason
+      const trimmedDetail = detail.trim() || undefined
+      // roomId 가 있으면 방 신고, 없으면(숨김 기능) 셋로그 신고.
+      return roomId != null
+        ? createReport({ roomId, reasonCode, detail: trimmedDetail })
+        : createSetlogReport({ setlogId: setlogId!, reasonCode, detail: trimmedDetail })
+    },
     onSuccess: onClose,
   })
 
   return (
     <Sheet title={`${targetName} 신고`} onClose={onClose}>
-      {/* 신고 단위가 대화방이라는 걸 분명히 알린다. 메시지 하나만 신고되는 게 아니다. */}
+      {/* 신고 단위가 대화방/영상 전체라는 걸 분명히 알린다. */}
       <p className="mb-3 text-[14px] text-muted-foreground">
-        이 대화방 전체가 관리자에게 전달됩니다.
+        {roomId != null
+          ? '이 대화방 전체가 관리자에게 전달됩니다.'
+          : '이 영상이 관리자에게 전달됩니다.'}
       </p>
 
       <fieldset className="flex flex-col gap-2">

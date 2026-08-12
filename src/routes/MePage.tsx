@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -8,13 +9,23 @@ import {
   WarningCircle,
   ArrowClockwise,
   Plus,
+  CalendarCheck,
+  UserCircle,
 } from '@phosphor-icons/react'
 import { ApiError } from '@/lib/api'
 import { Page } from '@/components/ui/Page'
+import { AvatarUpload } from '@/components/ui/AvatarUpload'
 import { useAuth } from '@/features/auth/auth-context'
-import { selectActivePet } from '@/features/auth/api'
-import { listMyPets } from '@/features/pet/api'
+import {
+  selectActivePet,
+  listNeighborhoods,
+  updateMyAvatar,
+} from '@/features/auth/api'
+import { listMyPets, updatePetProfileImage } from '@/features/pet/api'
 import { ageFrom, type Pet } from '@/features/pet/types'
+import { listMyMeetingCards } from '@/features/meeting/api'
+import { CARD_TYPE_LABEL, type MeetingCardListItem } from '@/features/meeting/types'
+import { formatMeetAt, formatParticipants } from '@/features/meeting/format'
 import { cn } from '@/lib/cn'
 
 /** Figma 기획의 마이페이지 메뉴. 순서를 임의로 바꾸지 않는다. */
@@ -23,6 +34,7 @@ const MENU: { label: string; to: string }[] = [
   { label: '친구 목록', to: '/me/friends' },
   { label: '나의 장소', to: '/me/places' },
   { label: '차단 목록', to: '/me/blocks' },
+  { label: '숨긴 셋로그', to: '/me/hidden-setlogs' },
   { label: '공지사항', to: '/notices' },
   { label: 'QNA', to: '/qna' },
   { label: 'FAQ', to: '/faq' },
@@ -31,11 +43,19 @@ const MENU: { label: string; to: string }[] = [
 export function MePage() {
   const { me, meStatus, meError, refetchMe, signOut } = useAuth()
   const queryClient = useQueryClient()
+  const [petsOpen, setPetsOpen] = useState(true)
 
   const pets = useQuery({
     queryKey: ['pets', 'me'],
     queryFn: listMyPets,
     retry: false,
+  })
+
+  /** 헤더와 같은 쿼리 키를 써서 캐시를 공유한다(추가 네트워크 요청 없음). */
+  const neighborhoods = useQuery({
+    queryKey: ['neighborhoods'],
+    queryFn: listNeighborhoods,
+    enabled: !!me,
   })
 
   const activate = useMutation({
@@ -74,11 +94,27 @@ export function MePage() {
     )
   }
 
+  const neighborhood = neighborhoods.data?.find(
+    (n) => n.code === me.neighborhoodCode,
+  )
+  const neighborhoodLabel =
+    neighborhood &&
+    (neighborhood.eupmyeondongName ?? neighborhood.sigunguName ?? neighborhood.sidoName)
+
   return (
     <Page title="마이 페이지">
       <section className="mb-6 rounded-xl border border-border bg-surface p-4">
         <div className="flex items-center gap-3">
-          <div aria-hidden className="size-14 shrink-0 rounded-full bg-muted" />
+          <AvatarUpload
+            src={me.avatarUrl}
+            alt={`${me.nickname} 프로필 사진`}
+            size={56}
+            fallback={<UserCircle size={32} />}
+            onUploaded={async (result) => {
+              await updateMyAvatar(result.media.id)
+              await queryClient.invalidateQueries({ queryKey: ['me'] })
+            }}
+          />
           <div className="min-w-0 flex-1">
             <p className="truncate text-lg font-bold">{me.nickname}</p>
             <p className="truncate text-[14px] text-muted-foreground">
@@ -89,7 +125,7 @@ export function MePage() {
 
         <dl className="mt-4 flex flex-col gap-2 text-[14px]">
           <Row term="공개 태그" desc={me.publicTag} mono />
-          <Row term="동네" desc={me.neighborhoodCode} />
+          <Row term="동네" desc={neighborhoodLabel ?? me.neighborhoodCode} />
         </dl>
 
         {/* L1 = Active Pet 이 없는 상태. 대부분의 기능이 막히므로 먼저 알린다. */}
@@ -113,7 +149,21 @@ export function MePage() {
 
       <section className="mb-6">
         <div className="mb-3 flex items-center gap-3">
-          <h2 className="flex-1 text-lg font-bold">나의 펫</h2>
+          <button
+            type="button"
+            onClick={() => setPetsOpen((o) => !o)}
+            aria-expanded={petsOpen}
+            className="flex flex-1 items-center gap-2 text-left"
+          >
+            <h2 className="text-lg font-bold">나의 펫</h2>
+            <CaretRight
+              size={18}
+              className={cn(
+                'text-muted-foreground transition-transform duration-200',
+                petsOpen && 'rotate-90',
+              )}
+            />
+          </button>
           <Link
             to="/me/pets/new"
             className="inline-flex min-h-11 items-center gap-1.5 font-semibold text-primary-strong"
@@ -123,47 +173,62 @@ export function MePage() {
           </Link>
         </div>
 
-        {pets.isPending && <p className="text-muted-foreground">불러오는 중…</p>}
+        {/* 다가오는 약속과 같은 grid-rows 트랜지션. 접혀도 내용은 마운트 상태로 둔다. */}
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows] duration-200 ease-out',
+            petsOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+          )}
+        >
+          <div className="overflow-hidden" inert={!petsOpen}>
+            {pets.isPending && (
+              <p className="text-muted-foreground">불러오는 중…</p>
+            )}
 
-        {pets.isError && (
-          <UnavailableNotice
-            endpoint="GET /pets/me"
-            error={pets.error}
-            onRetry={() => void pets.refetch()}
-          />
-        )}
-
-        {pets.data?.length === 0 && (
-          <p className="rounded-xl border border-dashed border-border p-6 text-center text-muted-foreground">
-            등록된 강아지가 없습니다.
-          </p>
-        )}
-
-        <ul className="flex flex-col gap-2">
-          {pets.data?.map((pet) => (
-            <li key={pet.petId}>
-              <PetRow
-                pet={pet}
-                isActive={me.activePetId === pet.petId}
-                onActivate={() => activate.mutate(pet.petId)}
-                activating={activate.isPending && activate.variables === pet.petId}
+            {pets.isError && (
+              <UnavailableNotice
+                endpoint="GET /pets/me"
+                error={pets.error}
+                onRetry={() => void pets.refetch()}
               />
-            </li>
-          ))}
-        </ul>
+            )}
 
-        {activate.isError && (
-          <p role="alert" className="mt-2 text-[14px] text-destructive">
-            대표 강아지를 바꾸지 못했습니다. 잠시 후 다시 시도해 주세요.
-          </p>
-        )}
+            {pets.data?.length === 0 && (
+              <p className="rounded-xl border border-dashed border-border p-6 text-center text-muted-foreground">
+                등록된 강아지가 없습니다.
+              </p>
+            )}
+
+            <ul className="flex flex-col gap-2">
+              {pets.data?.map((pet) => (
+                <li key={pet.petId}>
+                  <PetRow
+                    pet={pet}
+                    isActive={me.activePetId === pet.petId}
+                    onActivate={() => activate.mutate(pet.petId)}
+                    activating={
+                      activate.isPending && activate.variables === pet.petId
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+
+            {activate.isError && (
+              <p role="alert" className="mt-2 text-[14px] text-destructive">
+                대표 강아지를 바꾸지 못했습니다. 잠시 후 다시 시도해 주세요.
+              </p>
+            )}
+          </div>
+        </div>
       </section>
 
       <section className="mb-6">
         <h2 className="mb-3 text-lg font-bold">메뉴</h2>
         <ul className="overflow-hidden rounded-xl border border-border bg-surface">
-          {MENU.map((item, i) => (
-            <li key={item.label} className={i > 0 ? 'border-t border-border' : ''}>
+          <UpcomingMeetingsMenuItem myPetId={me.activePetId} />
+          {MENU.map((item) => (
+            <li key={item.label} className="border-t border-border">
               <Link
                 to={item.to}
                 className="flex min-h-11 items-center justify-between px-4 py-3 transition-colors hover:bg-primary-subtle"
@@ -203,6 +268,129 @@ export function MePage() {
         로그아웃
       </button>
     </Page>
+  )
+}
+
+/**
+ * 메뉴 목록 안에서 펼쳐지는 "다가오는 약속" 아코디언 행.
+ *
+ * 펼치기 전엔 요청을 보내지 않는다 — listMyMeetingCards 가 부르는
+ * GET /meeting-cards/me 는 아직 BE 계약에 없는 제안 단계 엔드포인트라, 방문
+ * 빈도가 높은 마이페이지에서 매번 에러를 띄우지 않으려는 것이다.
+ */
+function UpcomingMeetingsMenuItem({ myPetId }: { myPetId: number | null }) {
+  const [open, setOpen] = useState(false)
+
+  const meetings = useQuery({
+    queryKey: ['meeting-cards', 'me', 'open'],
+    queryFn: () => listMyMeetingCards({ status: 'OPEN', limit: 5 }),
+    enabled: open,
+    retry: false,
+  })
+
+  const items = meetings.data?.items ?? []
+
+  return (
+    <li className="border-b border-border">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex min-h-11 w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-primary-subtle"
+      >
+        <span className="flex items-center gap-2">
+          <CalendarCheck size={18} className="text-muted-foreground" />
+          다가오는 약속
+        </span>
+        <CaretRight
+          size={18}
+          className={cn(
+            'text-muted-foreground transition-transform',
+            open && 'rotate-90',
+          )}
+        />
+      </button>
+
+      {/*
+        grid-template-rows 를 0fr↔1fr 로 트랜지션해 부드럽게 접고 편다.
+        조건부 렌더( {open && ...} )로 하면 닫힐 때 DOM 이 즉시 사라져 애니메이션이
+        안 먹으므로, 내용은 항상 마운트해 두고 높이만 CSS 로 접는다.
+      */}
+      <div
+        className={cn(
+          'grid transition-[grid-template-rows] duration-200 ease-out',
+          open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+        )}
+      >
+        <div className="overflow-hidden" inert={!open}>
+          <div className="border-t border-border bg-background px-4 py-3">
+            {meetings.isPending && (
+              <p className="text-[14px] text-muted-foreground">불러오는 중…</p>
+            )}
+
+            {meetings.isError && (
+              <UnavailableNotice
+                endpoint="GET /meeting-cards/me"
+                error={meetings.error}
+                onRetry={() => void meetings.refetch()}
+              />
+            )}
+
+            {meetings.isSuccess && items.length === 0 && (
+              <p className="text-[14px] text-muted-foreground">
+                다가오는 약속이 없습니다.
+              </p>
+            )}
+
+            {items.length > 0 && (
+              <ul className="flex flex-col gap-2">
+                {items.slice(0, 3).map((card) => (
+                  <li key={card.cardId}>
+                    <MeetingPreviewRow card={card} myPetId={myPetId} />
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <Link
+              to="/meetings"
+              className="mt-3 inline-flex min-h-11 items-center font-semibold text-primary-strong"
+            >
+              전체보기
+            </Link>
+          </div>
+        </div>
+      </div>
+    </li>
+  )
+}
+
+function MeetingPreviewRow({
+  card,
+  myPetId,
+}: {
+  card: MeetingCardListItem
+  myPetId: number | null
+}) {
+  // ⚠️ 배포된 GET /meeting-cards/me 가 participants 인라인을 안 줄 수 있다. 방어한다.
+  const participants = card.participants ?? []
+  const others = participants.filter((p) => p.petId !== myPetId)
+  const withLabel = formatParticipants(
+    others.length > 0 ? others : participants,
+  )
+
+  return (
+    <Link
+      to={`/meeting-cards/${card.cardId}`}
+      className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-primary-subtle"
+    >
+      <span className="min-w-0 truncate text-[14px] font-medium">
+        {withLabel}와의 {CARD_TYPE_LABEL[card.cardType]}
+      </span>
+      <span className="shrink-0 text-[13px] text-muted-foreground">
+        {formatMeetAt(card.meetAt)}
+      </span>
+    </Link>
   )
 }
 
@@ -288,6 +476,7 @@ function PetRow({
   activating: boolean
 }) {
   const age = ageFrom(pet.birthDate)
+  const queryClient = useQueryClient()
 
   return (
     <div
@@ -296,16 +485,25 @@ function PetRow({
         isActive ? 'border-primary' : 'border-border',
       )}
     >
+      {/*
+        업로드 카메라 배지가 있는 아바타는 Link 밖에 둔다 — <a> 안에 <button> 을
+        중첩하면 안 되고, 클릭도 항상 상세 페이지 이동으로 새 버린다.
+      */}
+      <AvatarUpload
+        src={pet.profileUrl}
+        alt={`${pet.nickname} 프로필 사진`}
+        size={44}
+        fallback={<Dog size={22} />}
+        onUploaded={async (result) => {
+          await updatePetProfileImage(pet.petId, result.media.id)
+          await queryClient.invalidateQueries({ queryKey: ['pets', 'me'] })
+        }}
+      />
+
       <Link
         to={`/me/pets/${pet.petId}`}
         className="flex min-w-0 flex-1 items-center gap-3"
       >
-        <div
-          aria-hidden
-          className="grid size-11 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground"
-        >
-          <Dog size={22} />
-        </div>
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-1.5 font-semibold">
             <span className="truncate">{pet.nickname}</span>

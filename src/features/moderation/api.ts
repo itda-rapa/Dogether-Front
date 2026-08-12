@@ -1,5 +1,14 @@
 import { apiRequest } from '@/lib/api'
-import type { Block, BlockListResult, Report, ReportReason } from './types'
+import type {
+  Block,
+  BlockListResult,
+  Report,
+  ReportActionBody,
+  ReportDetail,
+  ReportListResult,
+  ReportReason,
+  ReportStatus,
+} from './types'
 
 /**
  * 차단.
@@ -34,4 +43,49 @@ export type CreateReportBody = {
 
 export function createReport(body: CreateReportBody) {
   return apiRequest<Report>('/reports', { method: 'POST', body })
+}
+
+export type CreateSetlogReportBody = {
+  setlogId: number
+  reasonCode: ReportReason
+  detail?: string
+}
+
+/**
+ * 셋로그 단위 신고. M1 계약에 없다 — 엔드포인트·바디 모양 모두 백엔드 협의 전
+ * 임시 추정치다. `SETLOG_REPORT_ENABLED`(ModerationMenu.tsx)로 UI 자체를
+ * 숨겨뒀으니, 협의가 끝나면 이 함수부터 실제 계약에 맞게 고칠 것.
+ */
+export function createSetlogReport(body: CreateSetlogReportBody) {
+  return apiRequest<Report>('/reports/setlogs', { method: 'POST', body })
+}
+
+/** 관리자 신고 큐. 최신 신고순, 같은 시각이면 ID 내림차순으로 서버가 정렬해서 준다. */
+export function listAdminReports(params: {
+  status?: ReportStatus
+  page: number
+  size: number
+}) {
+  const q = new URLSearchParams()
+  if (params.status) q.set('status', params.status)
+  q.set('page', String(params.page))
+  q.set('size', String(params.size))
+  return apiRequest<ReportListResult>(`/admin/reports?${q.toString()}`)
+}
+
+/** 신고 상세 + 증거(신고자·피신고자·방·전체 메시지). */
+export function getAdminReport(reportId: number | string) {
+  return apiRequest<ReportDetail>(`/admin/reports/${reportId}`)
+}
+
+/**
+ * 신고 처리. DISMISSED → NO_ACTION, WARNING → ACTIONED.
+ * 이미 종결됐거나 다른 관리자가 동시에 처리하면 409 다 — 호출부에서 상세를
+ * 재조회해 최신 상태를 보여줘야 한다.
+ */
+export function actOnReport(reportId: number | string, body: ReportActionBody) {
+  return apiRequest<Report>(`/admin/reports/${reportId}/actions`, {
+    method: 'POST',
+    body,
+  })
 }

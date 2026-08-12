@@ -1,15 +1,43 @@
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { Heart, MapPin, Storefront } from '@phosphor-icons/react'
+import { CircleNotch, Heart, MapPin, Storefront, Warning } from '@phosphor-icons/react'
 import { Page } from '@/components/ui/Page'
 import { NotConnected } from '@/components/ui/NotConnected'
 import { cn } from '@/lib/cn'
 
 const FILTERS = ['약국', '병원', '카페', '호텔'] as const
 
+type GeoStatus = 'idle' | 'pending' | 'granted' | 'denied'
+
 export function MapPage() {
   const [params, setParams] = useSearchParams()
   const active = params.get('filter') ?? '약국'
   const likedOnly = params.get('liked') === '1'
+
+  /*
+    채팅 팝업(B-3)에서 "지도에서 보기"를 눌렀을 때만 위치 권한을 묻는다.
+    지도를 그냥 둘러보러 온 방문에서는 묻지 않는다.
+  */
+  const wantsLocate = params.get('intent') === 'locate'
+  const [geoStatus, setGeoStatus] = useState<GeoStatus>('idle')
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null)
+
+  useEffect(() => {
+    if (!wantsLocate || geoStatus !== 'idle') return
+    if (!('geolocation' in navigator)) {
+      setGeoStatus('denied')
+      return
+    }
+    setGeoStatus('pending')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setGeoStatus('granted')
+      },
+      () => setGeoStatus('denied'),
+      { timeout: 8000 },
+    )
+  }, [wantsLocate, geoStatus])
 
   return (
     <Page title="지도">
@@ -52,6 +80,29 @@ export function MapPage() {
         </button>
       </div>
 
+      {wantsLocate && (
+        <p className="mb-3 flex items-center gap-1.5 text-[13px] text-muted-foreground">
+          {geoStatus === 'pending' && (
+            <>
+              <CircleNotch size={14} className="animate-spin" aria-hidden />
+              내 위치를 확인하는 중…
+            </>
+          )}
+          {geoStatus === 'granted' && coords && (
+            <>
+              <MapPin size={14} aria-hidden />
+              내 위치 확인됨 ({coords.lat.toFixed(4)}, {coords.lng.toFixed(4)})
+            </>
+          )}
+          {geoStatus === 'denied' && (
+            <>
+              <Warning size={14} aria-hidden />
+              위치 권한이 없어 기본 목록만 보여줍니다.
+            </>
+          )}
+        </p>
+      )}
+
       {/*
         지도 SDK 자리. 네이버 지도 JS SDK 를 붙인다.
         window 의존이라 클라이언트에서만 초기화되며, 컨테이너 높이를 미리 잡아
@@ -84,7 +135,12 @@ export function MapPage() {
             ? 'GET /me/places'
             : '네이버 지역검색 API · 공공데이터포털 동물위탁관리업'
         }
-        note="카페·호텔 데이터를 어디서 가져올지 확인이 필요합니다. 견종 크기별 가능 여부와 예방접종 요구 여부는 API 에 없을 수 있습니다."
+        note={
+          '카페·호텔 데이터를 어디서 가져올지 확인이 필요합니다. 견종 크기별 가능 여부와 예방접종 요구 여부는 API 에 없을 수 있습니다.' +
+          (coords
+            ? ` 현재 좌표(${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}) 기준 반경 검색은 카카오 로컬 API 연동 후 제공됩니다.`
+            : '')
+        }
       />
     </Page>
   )

@@ -3,7 +3,6 @@ import { Link, Navigate, useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useQuery } from '@tanstack/react-query'
 import { ArrowClockwise, CheckCircle, PencilSimple } from '@phosphor-icons/react'
 import { Field } from '@/components/ui/Field'
 import { inputClass } from '@/components/ui/input-class'
@@ -13,10 +12,9 @@ import { useAuth } from '@/features/auth/auth-context'
 import { toAuthMessage, isEmailVerificationExpired } from '@/features/auth/error-message'
 import {
   confirmEmailVerification,
-  listNeighborhoods,
   requestEmailVerification,
+  resetPassword,
 } from '@/features/auth/api'
-import { formatNeighborhood } from '@/features/auth/types'
 import type {
   EmailVerificationChallenge,
   EmailVerificationConfirmed,
@@ -31,34 +29,22 @@ const codeSchema = z.object({
   code: z.string().regex(/^[0-9]{6}$/, '6자리 숫자를 입력해 주세요.'),
 })
 
-// 제약은 OpenAPI SignupRequest 를 그대로 옮긴 것이다. 임의로 완화하지 않는다.
-const detailsSchema = z
-  .object({
-    password: z
-      .string()
-      .min(10, '비밀번호는 10자 이상이어야 합니다.')
-      .max(128, '비밀번호는 128자 이하여야 합니다.'),
-    confirmPassword: z.string(),
-    nickname: z
-      .string()
-      .trim()
-      .min(2, '닉네임은 2자 이상이어야 합니다.')
-      .max(20, '닉네임은 20자 이하여야 합니다.'),
-    neighborhoodCode: z.string().min(1, '동네를 선택해 주세요.'),
-  })
-  .refine((values) => values.password === values.confirmPassword, {
-    message: '비밀번호가 일치하지 않습니다.',
-    path: ['confirmPassword'],
-  })
+// 제약은 SignupRequest.password 와 동일하게 맞춘다. 임의로 완화하지 않는다.
+const passwordSchema = z.object({
+  password: z
+    .string()
+    .min(10, '비밀번호는 10자 이상이어야 합니다.')
+    .max(128, '비밀번호는 128자 이하여야 합니다.'),
+})
 
 type EmailValues = z.input<typeof emailSchema>
 type CodeValues = z.input<typeof codeSchema>
-type DetailsValues = z.input<typeof detailsSchema>
+type PasswordValues = z.input<typeof passwordSchema>
 
-type Step = 'email' | 'code' | 'details'
+type Step = 'email' | 'code' | 'password'
 
-export function SignupPage() {
-  const { signUp, hasSession, loading } = useAuth()
+export function ResetPasswordPage() {
+  const { hasSession, loading } = useAuth()
   const navigate = useNavigate()
 
   const [step, setStep] = useState<Step>('email')
@@ -67,13 +53,6 @@ export function SignupPage() {
   const [resendAvailableAt, setResendAvailableAt] = useState<string | null>(null)
   const [verification, setVerification] = useState<EmailVerificationConfirmed | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-
-  // 동네 목록은 공개 API 라 로그인 전에, 이메일 인증과 무관하게 미리 불러둔다.
-  const neighborhoods = useQuery({
-    queryKey: ['neighborhoods'],
-    queryFn: listNeighborhoods,
-    staleTime: 60 * 60 * 1000,
-  })
 
   const emailForm = useForm<EmailValues>({
     resolver: zodResolver(emailSchema),
@@ -87,23 +66,24 @@ export function SignupPage() {
     defaultValues: { code: '' },
   })
 
-  const detailsForm = useForm<DetailsValues>({
-    resolver: zodResolver(detailsSchema),
+  const passwordForm = useForm<PasswordValues>({
+    resolver: zodResolver(passwordSchema),
     mode: 'onTouched',
-    defaultValues: { password: '', confirmPassword: '', nickname: '', neighborhoodCode: '' },
+    defaultValues: { password: '' },
   })
 
   const codeExpiresIn = useCountdown(challenge?.expiresAt ?? null)
   const resendIn = useCountdown(resendAvailableAt)
 
   const startChallenge = async (targetEmail: string) => {
-    const result = await requestEmailVerification({ email: targetEmail, purpose: 'SIGNUP' })
+    const result = await requestEmailVerification({
+      email: targetEmail,
+      purpose: 'PASSWORD_RESET',
+    })
     setChallenge(result)
     setResendAvailableAt(new Date(Date.now() + result.resendAfterSeconds * 1000).toISOString())
   }
 
-  // expired-redirect(코드 재확인 없이 이메일 단계로 되돌아가는 경우)는 방금 세팅한
-  // 만료 안내 문구를 지우면 안 되므로 keepError 로 구분한다.
   const backToEmail = (opts?: { keepError?: boolean }) => {
     setChallenge(null)
     setVerification(null)
@@ -142,19 +122,22 @@ export function SignupPage() {
         code: values.code,
       })
       setVerification(result)
-      setStep('details')
+      setStep('password')
     } catch (e) {
       setSubmitError(toAuthMessage(e))
       if (isEmailVerificationExpired(e)) backToEmail({ keepError: true })
     }
   })
 
-  const onSubmitDetails = detailsForm.handleSubmit(async ({ confirmPassword: _confirmPassword, ...values }) => {
+  const onSubmitPassword = passwordForm.handleSubmit(async (values) => {
     if (!verification) return
     setSubmitError(null)
     try {
-      await signUp({ email, ...values, verificationToken: verification.verificationToken })
-      navigate('/', { replace: true })
+      await resetPassword({
+        verificationToken: verification.verificationToken,
+        newPassword: values.password,
+      })
+      navigate('/login', { replace: true, state: { passwordResetDone: true } })
     } catch (e) {
       setSubmitError(toAuthMessage(e))
       if (isEmailVerificationExpired(e)) backToEmail({ keepError: true })
@@ -164,7 +147,7 @@ export function SignupPage() {
   if (!loading && hasSession) return <Navigate to="/" replace />
 
   return (
-    <AuthLayout title="회원가입" subtitle="이메일을 인증하고 시작하세요">
+    <AuthLayout title="비밀번호 재설정" subtitle="이메일을 인증하고 새 비밀번호를 설정하세요">
       {step === 'email' && (
         <form onSubmit={onSubmitEmail} className="flex flex-col gap-5" noValidate>
           <Field label="이메일" error={emailForm.formState.errors.email?.message}>
@@ -247,17 +230,14 @@ export function SignupPage() {
             </p>
           )}
 
-          <Button
-            type="submit"
-            disabled={codeForm.formState.isSubmitting || codeExpiresIn <= 0}
-          >
+          <Button type="submit" disabled={codeForm.formState.isSubmitting || codeExpiresIn <= 0}>
             {codeForm.formState.isSubmitting ? '확인 중…' : '확인'}
           </Button>
         </form>
       )}
 
-      {step === 'details' && (
-        <form onSubmit={onSubmitDetails} className="flex flex-col gap-5" noValidate>
+      {step === 'password' && (
+        <form onSubmit={onSubmitPassword} className="flex flex-col gap-5" noValidate>
           <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-3 text-[14px]">
             <CheckCircle size={18} weight="fill" className="shrink-0 text-primary-strong" />
             <span className="truncate">{email}</span>
@@ -265,9 +245,9 @@ export function SignupPage() {
           </div>
 
           <Field
-            label="비밀번호"
+            label="새 비밀번호"
             hint="10자 이상"
-            error={detailsForm.formState.errors.password?.message}
+            error={passwordForm.formState.errors.password?.message}
           >
             {({ id, describedBy, invalid }) => (
               <input
@@ -277,89 +257,8 @@ export function SignupPage() {
                 aria-describedby={describedBy}
                 aria-invalid={invalid}
                 className={inputClass(invalid)}
-                {...detailsForm.register('password')}
+                {...passwordForm.register('password')}
               />
-            )}
-          </Field>
-
-          <Field
-            label="비밀번호 확인"
-            error={detailsForm.formState.errors.confirmPassword?.message}
-          >
-            {({ id, describedBy, invalid }) => (
-              <input
-                id={id}
-                type="password"
-                autoComplete="new-password"
-                aria-describedby={describedBy}
-                aria-invalid={invalid}
-                className={inputClass(invalid)}
-                {...detailsForm.register('confirmPassword')}
-              />
-            )}
-          </Field>
-
-          <Field
-            label="닉네임"
-            hint="2~20자"
-            error={detailsForm.formState.errors.nickname?.message}
-          >
-            {({ id, describedBy, invalid }) => (
-              <input
-                id={id}
-                type="text"
-                autoComplete="nickname"
-                aria-describedby={describedBy}
-                aria-invalid={invalid}
-                className={inputClass(invalid)}
-                {...detailsForm.register('nickname')}
-              />
-            )}
-          </Field>
-
-          <Field
-            label="동네"
-            error={
-              detailsForm.formState.errors.neighborhoodCode?.message ??
-              (neighborhoods.isError ? '동네 목록을 불러오지 못했습니다.' : undefined)
-            }
-          >
-            {({ id, describedBy, invalid }) => (
-              <>
-                <select
-                  id={id}
-                  aria-describedby={describedBy}
-                  aria-invalid={invalid}
-                  disabled={!neighborhoods.data}
-                  className={inputClass(invalid)}
-                  {...detailsForm.register('neighborhoodCode')}
-                >
-                  <option value="">
-                    {neighborhoods.isPending
-                      ? '불러오는 중…'
-                      : neighborhoods.isError
-                        ? '불러오지 못했습니다'
-                        : '동네를 선택하세요'}
-                  </option>
-                  {neighborhoods.data?.map((n) => (
-                    <option key={n.code} value={n.code}>
-                      {formatNeighborhood(n)}
-                    </option>
-                  ))}
-                </select>
-
-                {/* 실패했을 때 사용자가 스스로 벗어날 수 있는 길을 반드시 남긴다. */}
-                {neighborhoods.isError && (
-                  <button
-                    type="button"
-                    onClick={() => void neighborhoods.refetch()}
-                    className="mt-1 inline-flex min-h-11 items-center gap-1.5 self-start font-semibold text-primary-strong"
-                  >
-                    <ArrowClockwise size={18} />
-                    다시 시도
-                  </button>
-                )}
-              </>
             )}
           </Field>
 
@@ -369,16 +268,15 @@ export function SignupPage() {
             </p>
           )}
 
-          <Button type="submit" disabled={detailsForm.formState.isSubmitting}>
-            {detailsForm.formState.isSubmitting ? '가입 중…' : '가입하기'}
+          <Button type="submit" disabled={passwordForm.formState.isSubmitting}>
+            {passwordForm.formState.isSubmitting ? '변경 중…' : '비밀번호 변경'}
           </Button>
         </form>
       )}
 
       <p className="mt-6 text-center text-[14px] text-muted-foreground">
-        이미 계정이 있으신가요?{' '}
         <Link to="/login" className="font-semibold text-primary-strong">
-          로그인
+          로그인으로 돌아가기
         </Link>
       </p>
     </AuthLayout>

@@ -9,11 +9,14 @@ import { ModerationMenu } from '@/components/ModerationMenu'
 import { SetlogViewer } from '@/components/SetlogViewer'
 import { listSetlogs } from '@/features/setlog/api'
 import { useSetlogActions } from '@/features/setlog/useSetlogActions'
+import { hideSetlog, isSetlogHidden } from '@/features/setlog/hiddenSetlogs'
 import { REACTION_LABEL, type ReactionType, type Setlog } from '@/features/setlog/types'
+import { useAuth } from '@/features/auth/auth-context'
 import { usePrefersReducedMotion } from '@/lib/usePrefersReducedMotion'
 import { cn } from '@/lib/cn'
 
 export function HomePage() {
+  const { me } = useAuth()
   const setlogs = useQuery({
     queryKey: ['setlogs'],
     queryFn: listSetlogs,
@@ -28,10 +31,18 @@ export function HomePage() {
   */
   const [overrides, setOverrides] = useState<Record<number, Setlog>>({})
   const [viewerIndex, setViewerIndex] = useState<number | null>(null)
+  /* "숨기기"는 localStorage 라 반응형이 아니다. 누르면 이 값을 올려 다시 읽게 한다. */
+  const [, bumpHiddenTick] = useState(0)
 
-  const items = (setlogs.data ?? []).map((s) => overrides[s.setlogId] ?? s)
+  const items = (setlogs.data?.items ?? [])
+    .map((s) => overrides[s.setlogId] ?? s)
+    .filter((s) => me == null || !isSetlogHidden(me.userId, s.setlogId))
   const update = (next: Setlog) =>
     setOverrides((prev) => ({ ...prev, [next.setlogId]: next }))
+  const hide = (setlogId: number) => {
+    if (me) hideSetlog(me.userId, setlogId)
+    bumpHiddenTick((t) => t + 1)
+  }
 
   return (
     <Page title="우리 동네 셋로그" description="동네 강아지들의 3~5초 영상" wide>
@@ -62,6 +73,7 @@ export function HomePage() {
               setlog={s}
               onChange={update}
               onOpen={() => setViewerIndex(i)}
+              onHide={() => hide(s.setlogId)}
             />
           </li>
         ))}
@@ -72,6 +84,7 @@ export function HomePage() {
           items={items}
           startIndex={viewerIndex}
           onChangeItem={update}
+          onHideItem={hide}
           onClose={() => setViewerIndex(null)}
         />
       )}
@@ -83,17 +96,17 @@ function SetlogCard({
   setlog,
   onChange,
   onOpen,
+  onHide,
 }: {
   setlog: Setlog
   onChange: (next: Setlog) => void
   onOpen: () => void
+  onHide: () => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const reduced = usePrefersReducedMotion()
-  const { interactive, toggle, greet, greetError } = useSetlogActions(
-    setlog,
-    onChange,
-  )
+  const { interactive, toggle, greet, greetError, alreadyGreeted } =
+    useSetlogActions(setlog, onChange)
 
   // 피드에서도 보이는 것만 재생한다. 전부 재생하면 스크롤이 버벅인다.
   useEffect(() => {
@@ -198,6 +211,23 @@ function SetlogCard({
       </div>
 
       <div className="flex items-center gap-1 border-t border-border px-2 py-1">
+        {/*
+          인사하기는 반응 토글과 무게가 다른 액션(채팅방 생성, 하루 10명 제한)이라
+          맨 왼쪽에 따로 떨어뜨려 둔다. 이미 인사한 상대면(409) 색만 바꿔 구별한다.
+        */}
+        <button
+          type="button"
+          onClick={() => greet.mutate()}
+          disabled={!interactive || greet.isPending}
+          className={cn(
+            'inline-flex min-h-11 items-center gap-1 whitespace-nowrap rounded-lg px-2 font-semibold transition-colors hover:bg-primary-subtle disabled:opacity-50',
+            alreadyGreeted ? 'text-muted-foreground' : 'text-primary-strong',
+          )}
+        >
+          <HandWaving size={18} weight="fill" className="shrink-0" />
+          {greet.isPending ? '보내는 중…' : '인사하기'}
+        </button>
+
         {/* CUTE 와 LIKE 는 배타적이지 않다. 각각 독립 토글이다. */}
         <ReactionButton
           type="CUTE"
@@ -205,6 +235,7 @@ function SetlogCard({
           count={setlog.cuteCount}
           disabled={!interactive}
           onClick={() => toggle('CUTE')}
+          className="ml-auto"
         />
         <ReactionButton
           type="LIKE"
@@ -214,19 +245,11 @@ function SetlogCard({
           onClick={() => toggle('LIKE')}
         />
 
-        <button
-          type="button"
-          onClick={() => greet.mutate()}
-          disabled={!interactive || greet.isPending}
-          className="ml-auto inline-flex min-h-11 items-center gap-1 whitespace-nowrap rounded-lg px-2 font-semibold text-primary-strong transition-colors hover:bg-primary-subtle disabled:opacity-50"
-        >
-          <HandWaving size={18} weight="fill" className="shrink-0" />
-          {greet.isPending ? '보내는 중…' : '인사하기'}
-        </button>
-
-        {/* 셋로그 신고는 M1 범위가 아니라 차단만 노출된다(roomId 를 넘기지 않음). */}
+        {/* 셋로그 신고는 M1 범위가 아니라 차단만 노출된다(ModerationMenu의 SETLOG_REPORT_ENABLED가 꺼져 있음). */}
         <ModerationMenu
+          setlogId={setlog.setlogId}
           targetPetId={setlog.authorPet.petId}
+          onHide={onHide}
           targetName={setlog.authorPet.nickname}
           dropdownDirection="up"
         />
@@ -247,12 +270,14 @@ function ReactionButton({
   count,
   disabled,
   onClick,
+  className,
 }: {
   type: ReactionType
   active: boolean
   count: number
   disabled: boolean
   onClick: () => void
+  className?: string
 }) {
   const Icon = type === 'CUTE' ? Smiley : Heart
   const label = REACTION_LABEL[type]
@@ -264,7 +289,10 @@ function ReactionButton({
       aria-label={active ? `${label} 취소` : label}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex min-h-11 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 transition-colors hover:bg-primary-subtle disabled:opacity-50"
+      className={cn(
+        'inline-flex min-h-11 shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 transition-colors hover:bg-primary-subtle disabled:opacity-50',
+        className,
+      )}
     >
       {/* 색만으로 상태를 알리지 않는다. 외곽선↔채움 형태도 함께 바뀐다. */}
       <Icon

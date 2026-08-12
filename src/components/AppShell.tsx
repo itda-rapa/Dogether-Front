@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { List, MagnifyingGlass, Bell, Sun, Moon } from '@phosphor-icons/react'
+import { MagnifyingGlass, Bell, Sun, Moon } from '@phosphor-icons/react'
 import { NAV_ITEMS } from '@/app/navigation'
 import { useTheme } from '@/app/theme-context'
 import { useAuth } from '@/features/auth/auth-context'
@@ -17,18 +17,33 @@ import { cn } from '@/lib/cn'
  */
 export function AppShell() {
   return (
-    <div className="min-h-dvh md:flex">
+    /*
+      모바일에서도 flex-col 로 세로 축을 잡아 둬야 한다. 이게 없으면 이 div 는
+      block 이라 안쪽 `flex-1 flex-col` 래퍼(Header+main)가 뷰포트 높이로
+      늘어나지 못하고 콘텐츠만큼만 차지한다. 다만 이것만으로는 부족하다 —
+      나머지 절반은 main 쪽 주석 참고.
+    */
+    <div className="flex min-h-dvh flex-col md:flex-row">
       <Sidebar />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Header />
 
         {/*
           하단 탭바가 콘텐츠를 가리지 않도록 여백을 확보한다.
           탭바 높이(64px) + iOS 홈 인디케이터 safe-area.
         */}
+        {/*
+          flex flex-col 이 반드시 필요하다. main 자체가 block 이면 안쪽에서
+          `min-h-full`(높이 100%)을 쓰는 자식이 퍼센트를 풀지 못한다 — main 의
+          높이가 flex-grow 로 "그려진" 값일 뿐 CSS 상 height 는 여전히 auto라서,
+          퍼센트 계산의 기준이 되지 못하기 때문이다(ChatRoomPage 입력창이 화면
+          하단이 아니라 메시지 바로 아래에 붙던 버그의 원인). main 을 flex-col
+          로 만들고 자식이 `flex-1`을 쓰면 퍼센트가 아니라 flex 계산이라 항상
+          늘어난다.
+        */}
         <main
-          className="flex-1 pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0"
+          className="flex min-h-0 flex-1 flex-col pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0"
           id="main-content"
         >
           <Outlet />
@@ -76,20 +91,20 @@ function Header() {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-surface/95 backdrop-blur">
       <div className="flex h-14 items-center gap-2 px-4">
-        <button
-          type="button"
-          aria-label="메뉴 열기"
-          className="grid size-11 shrink-0 place-items-center rounded-lg transition-colors hover:bg-primary-subtle md:hidden"
-        >
-          <List size={22} />
-        </button>
-
         {/* 프로필을 누르면 마이 페이지로. 대표 펫이 없으면 등록 화면으로 바로 보낸다. */}
         <Link
           to={me && !hasActivePet ? '/me/pets/new' : '/me'}
           className="flex min-w-0 items-center gap-2"
         >
-          <div aria-hidden className="size-9 shrink-0 rounded-full bg-muted" />
+          {me?.avatarUrl ? (
+            <img
+              src={me.avatarUrl}
+              alt=""
+              className="size-9 shrink-0 rounded-full bg-muted object-cover"
+            />
+          ) : (
+            <div aria-hidden className="size-9 shrink-0 rounded-full bg-muted" />
+          )}
           <span className="truncate font-semibold">{profileLabel}</span>
           {/* 동네는 정보성 태그라 솔리드 CTA보다 낮은 위계로 표시한다. */}
           {me && (
@@ -164,7 +179,8 @@ function IconButton({
 function Sidebar() {
   return (
     <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 border-r border-border bg-surface px-3 py-4 md:block">
-      <Link to="/" className="block px-3 pb-6 text-xl font-bold text-primary-strong">
+      <Link to="/" className="flex items-center gap-2 px-3 pb-6 text-xl font-bold text-primary-strong">
+        <img src="/logo-mark.png" alt="" className="size-6 shrink-0" />
         Dogether
       </Link>
 

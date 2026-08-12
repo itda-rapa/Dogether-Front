@@ -22,6 +22,7 @@ export type AuthContextValue = {
     password: string
     nickname: string
     neighborhoodCode: string
+    verificationToken: string
   }) => Promise<void>
   signOut: () => Promise<void>
 }
