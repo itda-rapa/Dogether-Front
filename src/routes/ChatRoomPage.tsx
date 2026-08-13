@@ -238,6 +238,7 @@ export function ChatRoomPage() {
           roomId={roomIdNum}
           enabled={canDraft && !blocked}
           sourceVersion={draftSourceVersion}
+          typing={draft !== ''}
         />
 
         <div className="p-3">

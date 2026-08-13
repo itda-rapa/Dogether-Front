@@ -31,11 +31,8 @@ export type FallbackReason =
   | null
 
 /**
- * POST /chat/rooms/{roomId}/card-drafts 응답. **단건 객체이며 배열이 아니다.**
- *
- * 배열로 열자는 논의가 있었지만, AI 서버가 실제로 최대 1건만 반환하는 것이
- * 확인되어 단건을 유지한다. 원소가 항상 0~1이면 배열은 UI 복잡도만 늘린다.
- * 여러 후보를 보여주려면 AI 쪽부터 바뀌어야 한다.
+ * POST /chat/rooms/{roomId}/card-drafts 응답 배열의 원소. 응답은 `CardDraft[]`이며
+ * 항상 1건 이상이다(후보가 없으면 fallback=true 인 빈 폼 1건).
  *
  * meetAt 은 단일 date-time 이다. AI 가 시각을 못 뽑으면 meetAt 만 null 이 되고
  * placeText·cardType 은 살아서 온다. 그 경우에도 카드는 성립한다.

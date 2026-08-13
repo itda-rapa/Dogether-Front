@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -52,6 +52,8 @@ export function MeetingDraftPage() {
   const { roomId = '' } = useParams()
   const navigate = useNavigate()
   const roomIdNum = Number(roomId)
+  const [searchParams] = useSearchParams()
+  const draftIdParam = searchParams.get('draftId')
 
   const draftQuery = useQuery({
     queryKey: ['card-draft', roomId],
@@ -64,8 +66,10 @@ export function MeetingDraftPage() {
     refetchOnMount: false,
   })
 
-  // 초안은 단건이다. ?draftId 는 제안 칩에서 온 경로를 구분하는 용도로만 남긴다.
-  const draft = draftQuery.data
+  // AI 가 여러 후보를 배열로 준다. 제안 스트립에서 특정 칩을 눌러 들어오면
+  // ?draftId 로 그 후보를 지정한다. 없으면(상단 "약속 잡기" 진입) 첫 후보를 쓴다.
+  const drafts = draftQuery.data
+  const draft = drafts?.find((d) => String(d.draftId) === draftIdParam) ?? drafts?.[0]
   const aiFilled = draft ? aiFilledMap(draft) : null
 
   const { register, handleSubmit, reset, watch, formState } = useForm<FormValues>({
