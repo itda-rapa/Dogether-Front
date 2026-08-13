@@ -132,6 +132,9 @@ export function OpenChatRoomPage() {
     },
     onSuccess: (drafts) => {
       setAiGenerating(false)
+      // 요청이 진행되는 동안 방에 카드가 먼저 만들어졌으면 이 응답은 이미 낡은 것이다.
+      // 그대로 반영하면 방금 지운 패널이 옛 초안으로 다시 채워진다.
+      if (messages.at(-1)?.type === 'CARD') return
       setAiDrafts(drafts)
       setAiNotice(drafts.length === 0 ? '표시할 약속 카드가 없습니다.' : null)
       queryClient.setQueryData(['card-draft', String(roomIdNumber)], drafts)

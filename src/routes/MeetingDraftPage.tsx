@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { WarningCircle, Sparkle, ArrowClockwise } from '@phosphor-icons/react'
 import { Page } from '@/components/ui/Page'
 import { Button } from '@/components/ui/Button'
@@ -56,6 +56,7 @@ const EMPTY: FormValues = { cardType: '', date: '', time: '', placeText: '' }
 export function MeetingDraftPage() {
   const { roomId = '' } = useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const roomIdNum = Number(roomId)
   const [searchParams] = useSearchParams()
   const draftIdParam = searchParams.get('draftId')
@@ -111,10 +112,17 @@ export function MeetingDraftPage() {
 
   const createCard = useMutation({
     mutationFn: createMeetingCard,
-    onSuccess: () => navigate(
-      openChat ? `/chat/open/${roomId}/room` : `/chat/${roomId}`,
-      { replace: true },
-    ),
+    onSuccess: () => {
+      // MeetingSuggestions 의 제안 스트립과 같은 쿼리 키다. staleTime: Infinity 라
+      // 지우지 않으면 다음에 다시 확정하려 할 때 방금 쓴 옛 초안을 그대로 보여준다.
+      if (!openChat) {
+        queryClient.removeQueries({ queryKey: ['card-draft', roomId] })
+      }
+      navigate(
+        openChat ? `/chat/open/${roomId}/room` : `/chat/${roomId}`,
+        { replace: true },
+      )
+    },
   })
 
   const onSubmit = handleSubmit((values) => {

@@ -128,17 +128,28 @@ export function ChatRoomPage() {
     onError: (e) => setSendError(toSendMessage(e)),
   })
 
-  const canDraft = useMemo(() => canDraftMeeting(messages), [messages])
+  // 카드가 이미 만들어진 대화는 다시 초안 후보로 삼지 않는다. 그렇지 않으면 카드
+  // 확정 -> 방으로 복귀 -> 확정 직전 TEXT가 다시 "최근 대화"로 잡혀 방금 만든
+  // 카드와 같은 내용의 제안이 다시 뜬다 (오픈채팅과 같은 계열의 버그).
+  const messagesSinceLastCard = useMemo(() => {
+    const lastCardIndex = messages.findLastIndex((message) => message.type === 'CARD')
+    return messages.slice(lastCardIndex + 1)
+  }, [messages])
+
+  const canDraft = useMemo(
+    () => canDraftMeeting(messagesSinceLastCard),
+    [messagesSinceLastCard],
+  )
   const draftSourceVersion = useMemo(
     () =>
-      messages.reduce(
+      messagesSinceLastCard.reduce(
         (latest, message) =>
           message.type === 'TEXT' && message.senderType === 'PET'
             ? Math.max(latest, message.messageId)
             : latest,
         0,
       ),
-    [messages],
+    [messagesSinceLastCard],
   )
 
   // 방금 내가 보낸 마지막 메시지에서만 판단한다. 상대가 답장하면 사라진다.
