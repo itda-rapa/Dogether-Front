@@ -35,10 +35,18 @@ export default defineConfig({
           })
         },
       },
+      // 채팅 WebSocket(STOMP). 백엔드는 /api 프리픽스 없이 /ws 에 붙는다.
+      // OriginHandshakeInterceptor 가 CorsProperties.allowedOrigins 로 Origin 을
+      // 한 번 더 검사하고 와일드카드를 거부하므로, /api 와 같은 이유로 Origin 을 뗀다.
       '/ws': {
-        target: process.env.VITE_WS_PROXY_TARGET ?? 'http://localhost:8081',
-        changeOrigin: false,
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
         ws: true,
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReqWs', (proxyReq) => {
+            proxyReq.removeHeader('origin')
+          })
+        },
       },
     },
   },

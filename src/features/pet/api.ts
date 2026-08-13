@@ -1,5 +1,12 @@
 import { apiRequest } from '@/lib/api'
-import type { Pet, PetSex, PetSize } from './types'
+import type {
+  Pet,
+  PetSex,
+  PetSize,
+  PetVerificationIssueBody,
+  PetVerificationIssueResult,
+} from './types'
+import type { PetSearchItem } from '@/features/chat/types'
 
 export type ActivePetAssignmentStatus =
   | 'ASSIGNED'
@@ -37,8 +44,14 @@ export type PetWriteBody = {
  * 펫 등록.
  * 한 사용자당 미삭제 펫은 최대 5마리(409 PET_LIMIT_EXCEEDED).
  * 첫 펫은 서버가 자동으로 Active 로 지정한다.
+ *
+ * `petVerificationToken` 은 `issuePetVerification({flowType:'PET_CREATE'})`으로
+ * 미리 발급받은 토큰이다 — 실으면 등록과 동시에 인증(verified=true)까지
+ * 한 트랜잭션으로 처리된다. 없으면 지금까지처럼 미인증 상태로 등록된다.
  */
-export function createPet(body: PetWriteBody & { nickname: string }) {
+export function createPet(
+  body: PetWriteBody & { nickname: string; petVerificationToken?: string },
+) {
   return apiRequest<PetCreateResponse>('/pets', {
     method: 'POST',
     body,
@@ -77,11 +90,36 @@ export function updatePetProfileImage(petId: number, mediaId: number) {
 }
 
 /**
- * 공개 태그로 상대 펫을 찾는다. 친구 요청의 진입점이다(OpenAPI 계약에 존재).
- * 컨트롤러는 아직 없어 404 가 온다 — 친구 기능은 BE-3 로 이관됐다.
+ * 공개 태그로 상대 펫을 찾는다. 친구 요청의 진입점이다.
+ * 결과 없음/자기 자신/차단 관계는 서버가 404 가 아니라 data: null 로 돌려준다.
  */
 export function searchPetByPublicTag(publicTag: string) {
-  return apiRequest<Pet | null>(
+  return apiRequest<PetSearchItem | null>(
     `/pets/search?publicTag=${encodeURIComponent(publicTag)}`,
   )
+}
+
+/**
+ * 동물등록 정보 조회 + 1회용 적용 토큰 발급.
+ * `flowType`으로 기존 펫에 적용할지(petId 필요), 신규 등록과 함께 인증할지를 가른다.
+ */
+export function issuePetVerification(body: PetVerificationIssueBody) {
+  return apiRequest<PetVerificationIssueResult>('/pet-verifications', {
+    method: 'POST',
+    body,
+  })
+}
+
+/**
+ * 발급받은 토큰을 실제 펫에 적용한다.
+ *
+ * 이 호출은 Pet 의 닉네임·품종·생일 등을 자동으로 덮어쓰지 않는다 —
+ * `verified`/`verifiedAt` 만 갱신된다. 조회 시 받은 petPrefill 이 실제 값과
+ * 다르면 사용자가 펫 수정 화면에서 따로 고쳐야 한다.
+ */
+export function applyPetVerification(petId: number, petVerificationToken: string) {
+  return apiRequest<Pet>(`/pets/${petId}/verification`, {
+    method: 'POST',
+    body: { petVerificationToken },
+  })
 }

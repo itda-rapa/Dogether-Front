@@ -13,6 +13,7 @@ import {
   listChatMessages,
   sendChatMessage,
 } from '@/features/chat/api'
+import { onChatMessageCreated, sendViaRealtime } from '@/features/chat/directRealtime'
 import {
   SEND_BLOCKED_MESSAGE,
   canDraftMeeting,
@@ -52,6 +53,8 @@ export function ChatRoomPage() {
   /** 다음 폴링에 넘길 커서. 렌더와 무관하게 즉시 읽혀야 해서 ref 로 둔다. */
   const afterRef = useRef<number | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
+  /** WS 전송 실패 시 REST 재시도에서도 같은 clientMessageId 를 재사용한다. */
+  const clientMessageIdRef = useRef<string | null>(null)
 
   const room = useQuery({
     queryKey: ['chat', 'room', roomId],
@@ -78,19 +81,47 @@ export function ChatRoomPage() {
     }
   }, [poll.data])
 
+  /*
+    WebSocket 이 켜져 있으면 폴링(3초)보다 먼저 도착한다. 3초 폴링은 안전망으로
+    그대로 둔다 — WS 가 끊겨도 조용히 폴링만 남는다(06_M2_WebSocket_계약.md §1).
+  */
+  useEffect(() => {
+    return onChatMessageCreated((message) => {
+      if (message.roomId !== roomIdNum) return
+      setMessages((prev) => mergeMessages(prev, [message]))
+      if (message.messageId > (afterRef.current ?? 0)) {
+        afterRef.current = message.messageId
+      }
+    })
+  }, [roomIdNum])
+
   // 새 메시지가 붙으면 아래로 붙여둔다.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [messages.length])
 
   const send = useMutation({
-    mutationFn: (message: { clientMessageId: string; body: string }) =>
-      sendChatMessage(roomIdNum, message),
-    onSuccess: (created) => {
-      setMessages((prev) => mergeMessages(prev, [created]))
-      if (created.messageId > (afterRef.current ?? 0)) {
-        afterRef.current = created.messageId
+    mutationFn: async (body: string): Promise<ChatMessage | { messageId: number }> => {
+      clientMessageIdRef.current ??= crypto.randomUUID()
+      const clientMessageId = clientMessageIdRef.current
+      try {
+        const ack = await sendViaRealtime(roomIdNum, clientMessageId, body)
+        return { messageId: ack.messageId }
+      } catch {
+        // WS 미연결·타임아웃·오류 — REST 로 fallback. 같은 clientMessageId 라
+        // 서버 멱등성으로 중복 저장되지 않는다(06_M2_WebSocket_계약.md §8).
+        return sendChatMessage(roomIdNum, { clientMessageId, body })
       }
+    },
+    onSuccess: (result) => {
+      // WS ACK 만 온 경우 실제 메시지 본문은 CHAT_MESSAGE_CREATED 구독이 채워준다.
+      if ('senderType' in result) {
+        setMessages((prev) => mergeMessages(prev, [result]))
+      }
+      if (result.messageId > (afterRef.current ?? 0)) {
+        afterRef.current = result.messageId
+      }
+      clientMessageIdRef.current = null
       setDraft('')
       setSendError(null)
     },
@@ -252,7 +283,7 @@ export function ChatRoomPage() {
             e.preventDefault()
             const body = draft.trim()
             if (!body || blocked || send.isPending) return
-            send.mutate({ clientMessageId: crypto.randomUUID(), body })
+            send.mutate(body)
           }}
         >
           <input

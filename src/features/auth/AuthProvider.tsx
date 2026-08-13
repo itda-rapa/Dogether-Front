@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { configureAuth } from '@/lib/api'
+import { connect as connectChatRealtime, disconnect as disconnectChatRealtime } from '@/features/chat/directRealtime'
 import { AuthContext } from './auth-context'
 import * as authApi from './api'
 import type { AuthTokens } from './types'
@@ -73,6 +74,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setHasSession(Boolean(accessToken.current ?? refreshToken.current))
     setLoading(false)
   }, [])
+
+  /*
+    채팅 WebSocket 연결도 세션을 따라간다. 토큰은 이미 위에서 ref 로 들고 있으니
+    새 접근자를 만들지 않고 그대로 넘긴다 — WEBSOCKET_ENABLED 가 꺼져 있으면
+    연결이 조용히 실패하고 REST 폴링이 그대로 동작한다(features/chat/directRealtime.ts).
+  */
+  useEffect(() => {
+    if (!hasSession) {
+      disconnectChatRealtime()
+      return
+    }
+    connectChatRealtime({
+      getToken: () => accessToken.current,
+      refresh: doRefresh,
+      onAuthLost: clearSession,
+    })
+    return () => disconnectChatRealtime()
+  }, [hasSession, doRefresh, clearSession])
 
   /*
     프로필은 세션과 분리된 별도 질의다.

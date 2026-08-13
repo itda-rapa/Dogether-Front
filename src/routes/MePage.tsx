@@ -28,15 +28,19 @@ import { CARD_TYPE_LABEL, type MeetingCardListItem } from '@/features/meeting/ty
 import { formatMeetAt, formatParticipants } from '@/features/meeting/format'
 import { cn } from '@/lib/cn'
 
-/** Figma 기획의 마이페이지 메뉴. 순서를 임의로 바꾸지 않는다. */
+/*
+  Figma 기획의 마이페이지 메뉴. 순서를 임의로 바꾸지 않는다.
+  "펫 인증"은 여기 없다 — 조회 API 가 petId 를 미리 알아야 해서(EXISTING_PET_VERIFY),
+  펫을 고르지 않은 채 들어오는 제너릭 진입점을 두지 않고 각 펫 상세 화면의
+  "인증하기" 버튼으로만 들어가게 했다(PetDetailPage.tsx).
+*/
 const MENU: { label: string; to: string }[] = [
-  { label: '펫 인증', to: '/me/pets/verify' },
   { label: '친구 목록', to: '/me/friends' },
   { label: '나의 장소', to: '/me/places' },
   { label: '차단 목록', to: '/me/blocks' },
   { label: '숨긴 셋로그', to: '/me/hidden-setlogs' },
   { label: '공지사항', to: '/notices' },
-  { label: 'QNA', to: '/qna' },
+  { label: 'Q&A', to: '/qna' },
   { label: 'FAQ', to: '/faq' },
 ]
 

@@ -1,21 +1,36 @@
+import { useEffect } from 'react'
 import { Link } from 'react-router'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { SealCheck, Dog, WarningCircle, ArrowClockwise, UsersThree } from '@phosphor-icons/react'
 import { Page } from '@/components/ui/Page'
 import { listChatRooms } from '@/features/chat/api'
+import { onChatMessageCreated } from '@/features/chat/directRealtime'
 import { formatTime, type ChatRoom } from '@/features/chat/types'
 import { ApiError } from '@/lib/api'
 
-/** 방 목록 폴링 주기. 상세 화면보다 느슨하게 둔다. */
+/** 방 목록 폴링 주기. 상세 화면보다 느슨하게 둔다. WS 가 켜져 있으면 실시간
+ *  이벤트가 그보다 먼저 무효화를 트리거한다. */
 const ROOMS_POLL_MS = 5000
 
 export function ChatPage() {
+  const queryClient = useQueryClient()
   const rooms = useQuery({
     queryKey: ['chat', 'rooms'],
     queryFn: () => listChatRooms({ limit: 30 }),
     refetchInterval: ROOMS_POLL_MS,
     retry: false,
   })
+
+  /*
+    모르는 roomId 의 이벤트(상대가 방금 인사를 보내 새로 생긴 방)도 그냥
+    무효화한다 — 어차피 재조회가 답이라 방 인식 여부를 따로 가릴 필요가 없다
+    (06_M2_WebSocket_계약.md §6.2).
+  */
+  useEffect(() => {
+    return onChatMessageCreated(() => {
+      void queryClient.invalidateQueries({ queryKey: ['chat', 'rooms'] })
+    })
+  }, [queryClient])
 
   return (
     <Page title="채팅">

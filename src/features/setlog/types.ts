@@ -34,6 +34,24 @@ export type Setlog = {
   createdAt: string
 }
 
+/** POST /setlogs/uploads 응답. objectKey 는 표시용이 아니라 서버 대응용이다. */
+export type SetlogUploadSession = {
+  uploadId: string
+  uploadUrl: string
+  objectKey: string
+  /** 스토리지 PUT 에 그대로 실어야 하는 서명 헤더. 빠뜨리면 서명이 어긋난다. */
+  headers: Record<string, string>
+  expiresAt: string
+}
+
+export type SetlogUploadStage = 'initializing' | 'uploading' | 'completing'
+
+export type SetlogUploadProgress = {
+  stage: SetlogUploadStage
+  uploadedBytes: number
+  totalBytes: number
+}
+
 /** PUT·DELETE /setlogs/{id}/reactions/{type} 응답 */
 export type SetlogReaction = {
   setlogId: number

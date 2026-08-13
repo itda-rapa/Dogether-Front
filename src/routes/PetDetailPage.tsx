@@ -78,13 +78,24 @@ function PetDetail({ pet }: { pet: Pet }) {
             {pet.publicTag}
           </p>
         </div>
-        <Link
-          to={`/me/pets/${pet.petId}/edit`}
-          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-3 font-semibold text-primary-strong transition-colors hover:bg-primary-subtle"
-        >
-          <PencilSimple size={18} weight="bold" />
-          수정
-        </Link>
+        <div className="flex shrink-0 items-center gap-1">
+          {!pet.verified && (
+            <Link
+              to={`/me/pets/${pet.petId}/verify`}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 font-semibold text-primary-strong transition-colors hover:bg-primary-subtle"
+            >
+              <SealCheck size={18} weight="bold" />
+              인증하기
+            </Link>
+          )}
+          <Link
+            to={`/me/pets/${pet.petId}/edit`}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 font-semibold text-primary-strong transition-colors hover:bg-primary-subtle"
+          >
+            <PencilSimple size={18} weight="bold" />
+            수정
+          </Link>
+        </div>
       </div>
 
       {pet.bio && <p className="mt-4">{pet.bio}</p>}

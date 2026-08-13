@@ -19,6 +19,7 @@ import { PlaceDetailPage } from '@/routes/PlaceDetailPage'
 import { PostDetailPage } from '@/routes/PostDetailPage'
 import { PostNewPage } from '@/routes/PostNewPage'
 import { UploadPage } from '@/routes/UploadPage'
+import { SetlogUploadPage } from '@/routes/SetlogUploadPage'
 import { MePage } from '@/routes/MePage'
 import { PetDetailPage } from '@/routes/PetDetailPage'
 import { PetEditPage } from '@/routes/PetEditPage'
@@ -120,13 +121,14 @@ export default function App() {
                   <Route path="map/:placeId" element={<PlaceDetailPage />} />
 
                   <Route path="upload" element={<UploadPage />} />
+                  <Route path="setlogs/new" element={<SetlogUploadPage />} />
 
                   {/* 마이 페이지 — /me/pets/new 는 :petId 보다 먼저 */}
                   <Route path="me" element={<MePage />} />
                   <Route path="me/pets/new" element={<PetNewPage />} />
-                  <Route path="me/pets/verify" element={<PetVerifyPage />} />
                   <Route path="me/pets/:petId" element={<PetDetailPage />} />
                   <Route path="me/pets/:petId/edit" element={<PetEditPage />} />
+                  <Route path="me/pets/:petId/verify" element={<PetVerifyPage />} />
 
                   {/* 남의 펫 프로필. 홈 피드 작성자 → 친구 요청 진입점 */}
                   <Route path="pets/:petId" element={<PetProfilePage />} />

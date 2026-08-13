@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Heart, Smiley, HandWaving, SealCheck } from '@phosphor-icons/react'
+import { Heart, Smiley, HandWaving, SealCheck, VideoCamera } from '@phosphor-icons/react'
 import { Page } from '@/components/ui/Page'
 import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -65,6 +65,16 @@ export function HomePage() {
           description="동네 강아지들의 영상이 올라오면 여기에 보여요."
         />
       )}
+
+      <div className="mb-4 flex justify-end">
+        <Link
+          to="/setlogs/new"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border-2 border-primary px-3 font-semibold text-primary-strong transition-colors hover:bg-primary-subtle"
+        >
+          <VideoCamera size={18} weight="bold" />
+          영상 올리기
+        </Link>
+      </div>
 
       <ul className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3 xl:gap-5">
         {items.map((s, i) => (
