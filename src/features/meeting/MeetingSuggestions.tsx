@@ -32,14 +32,11 @@ export function MeetingSuggestions({
   /** 사용자가 입력창에 뭔가 치고 있는지. true가 되면 별도 닫기 없이 스트립을 숨긴다. */
   typing: boolean
 }) {
+  /** X 버튼으로 영구히 닫았는지. 타이핑 중 숨김과는 별개 — 되돌아올 수 있어야 한다. */
   const [dismissed, setDismissed] = useState(false)
   /** "약속을 잡아볼까요?" 에 동의했는지. 이게 true 여야 AI 를 실제로 부른다. */
   const [confirmed, setConfirmed] = useState(false)
   const lastRequestedSourceVersion = useRef<number | null>(null)
-
-  useEffect(() => {
-    if (typing) setDismissed(true)
-  }, [typing])
 
   const draft = useQuery({
     // 확인 화면과 같은 키를 쓴다. 카드를 눌러 이동하면 재호출 없이 즉시 뜬다.
@@ -67,7 +64,9 @@ export function MeetingSuggestions({
     void refetchDraft()
   }, [confirmed, dismissed, enabled, refetchDraft, sourceVersion])
 
-  if (!enabled || dismissed) return null
+  // 타이핑 중엔 입력창을 가리지 않게 잠깐 숨긴다 — X 로 닫은 것과 달리, 타이핑을
+  // 멈추면 (조건이 여전히 맞으면) 다시 뜬다.
+  if (!enabled || dismissed || typing) return null
 
   // 아직 동의 전이다 — AI 를 부르기 전에 먼저 묻는다.
   // 문구 자체가 버튼이다. 무시하려면 그냥 채팅을 치면 된다(위 useEffect).

@@ -103,6 +103,14 @@ export function OpenChatRoomPage() {
     bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [messages.length])
 
+  // 카드가 실제로 만들어지면(내가 만들었든, 다른 참여자가 만들었든) 화면에 남아있던
+  // AI 초안 패널을 지운다. 그대로 두면 이미 소비된 초안이 계속 떠 있는 것처럼 보인다.
+  useEffect(() => {
+    if (messages.at(-1)?.type !== 'CARD') return
+    setAiDrafts([])
+    setAiNotice(null)
+  }, [messages])
+
   const send = useMutation({
     mutationFn: (message: { clientMessageId: string; body: string }) =>
       sendChatMessage(roomIdNumber, message),
@@ -142,13 +150,19 @@ export function OpenChatRoomPage() {
       me?.activePetId == null
     ) return
 
-    const recentPetMessages = messages.filter(
-      (message) =>
-        message.type === 'TEXT' &&
-        message.senderType === 'PET' &&
-        message.senderPetId != null &&
-        new Date(message.createdAt).getTime() >= Date.now() - DAY_MS,
-    )
+    // 카드가 이미 만들어진 대화는 다시 초안 후보로 삼지 않는다.
+    // 그렇지 않으면 카드 확정 -> 페이지 재마운트 -> 확정 직전 TEXT가 다시
+    // "최신 발화"로 잡혀 같은 초안이 무한 재생성된다.
+    const lastCardIndex = messages.findLastIndex((message) => message.type === 'CARD')
+    const recentPetMessages = messages
+      .slice(lastCardIndex + 1)
+      .filter(
+        (message) =>
+          message.type === 'TEXT' &&
+          message.senderType === 'PET' &&
+          message.senderPetId != null &&
+          new Date(message.createdAt).getTime() >= Date.now() - DAY_MS,
+      )
     const latest = recentPetMessages.at(-1)
     if (!latest || latest.senderPetId !== me.activePetId) return
 
@@ -349,6 +363,17 @@ export function OpenChatRoomPage() {
           <section className="mb-3 rounded-xl border border-primary/30 bg-primary-subtle p-3" aria-label="AI 약속 카드">
             <div className="mb-2 flex items-center gap-2 text-[14px] font-semibold text-primary-strong">
               <Sparkle size={16} weight="fill" /> AI 약속 카드
+              <button
+                type="button"
+                aria-label="AI 약속 카드 닫기"
+                onClick={() => {
+                  setAiDrafts([])
+                  setAiNotice(null)
+                }}
+                className="ml-auto grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-primary/20"
+              >
+                <X size={16} />
+              </button>
             </div>
             {aiGenerating ? (
               <p className="text-[14px] text-muted-foreground">대화를 살펴보고 약속 참여자를 정리하고 있어요.</p>
