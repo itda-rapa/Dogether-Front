@@ -11,6 +11,7 @@ import type {
 
 const MAX_SETLOG_UPLOAD_BYTES = 200 * 1024 * 1024
 const SETLOG_CONTENT_TYPES = ['video/mp4', 'video/webm']
+export const MAX_SETLOG_CAPTION_LENGTH = 500
 
 export class SetlogUploadError extends Error {
   constructor(message: string) {
@@ -62,10 +63,14 @@ export function createSetlogUploadSession(body: {
   })
 }
 
-export function completeSetlogUpload(uploadId: string, clientRequestId: string) {
+export function completeSetlogUpload(
+  uploadId: string,
+  clientRequestId: string,
+  caption: string | null,
+) {
   return apiRequest<Setlog>(`/setlogs/uploads/${uploadId}/complete`, {
     method: 'POST',
-    body: { clientRequestId },
+    body: { clientRequestId, caption },
   })
 }
 
@@ -80,6 +85,20 @@ export function getSetlogVideoError(file: File): string | null {
   return null
 }
 
+/** 서버와 동일하게 trim 기준으로 길이를 검사한다. */
+export function getSetlogCaptionError(caption: string): string | null {
+  if (caption.trim().length > MAX_SETLOG_CAPTION_LENGTH) {
+    return `캡션은 ${MAX_SETLOG_CAPTION_LENGTH}자 이하로 입력해 주세요.`
+  }
+  return null
+}
+
+/** trim 후 빈 문자열이면 null 로 보낸다. 서버의 정규화 규칙과 맞춘다. */
+function normalizeCaption(caption: string): string | null {
+  const trimmed = caption.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
 /**
  * 셋로그 영상 업로드: 세션 생성 → presigned PUT → 완료 신고.
  *
@@ -90,10 +109,14 @@ export function getSetlogVideoError(file: File): string | null {
 export async function uploadSetlogVideo(
   petId: number,
   file: File,
+  caption: string,
   onProgress?: (progress: SetlogUploadProgress) => void,
 ): Promise<Setlog> {
   const validationError = getSetlogVideoError(file)
   if (validationError) throw new SetlogUploadError(validationError)
+
+  const captionError = getSetlogCaptionError(caption)
+  if (captionError) throw new SetlogUploadError(captionError)
 
   onProgress?.({ stage: 'initializing', uploadedBytes: 0, totalBytes: file.size })
 
@@ -108,7 +131,7 @@ export async function uploadSetlogVideo(
   onProgress?.({ stage: 'uploading', uploadedBytes: file.size, totalBytes: file.size })
 
   onProgress?.({ stage: 'completing', uploadedBytes: file.size, totalBytes: file.size })
-  return completeSetlogUpload(session.uploadId, crypto.randomUUID())
+  return completeSetlogUpload(session.uploadId, crypto.randomUUID(), normalizeCaption(caption))
 }
 
 async function putToStorage(url: string, file: File, headers: Record<string, string>) {

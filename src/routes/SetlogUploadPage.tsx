@@ -4,8 +4,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle, FilmSlate, UploadSimple, WarningCircle } from '@phosphor-icons/react'
 import { Page } from '@/components/ui/Page'
 import { Button } from '@/components/ui/Button'
+import { inputClass } from '@/components/ui/input-class'
 import {
   getSetlogVideoError,
+  MAX_SETLOG_CAPTION_LENGTH,
   SetlogUploadError,
   uploadSetlogVideo,
 } from '@/features/setlog/api'
@@ -20,6 +22,7 @@ export function SetlogUploadPage() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const [file, setFile] = useState<File | null>(null)
+  const [caption, setCaption] = useState('')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [selectionError, setSelectionError] = useState<string | null>(null)
   const [progress, setProgress] = useState<SetlogUploadProgress | null>(null)
@@ -35,11 +38,11 @@ export function SetlogUploadPage() {
   }, [file])
 
   const upload = useMutation({
-    mutationFn: (selected: File) => {
+    mutationFn: ({ file: selected, caption: selectedCaption }: { file: File; caption: string }) => {
       if (!me?.activePetId) {
         throw new SetlogUploadError('대표 강아지를 먼저 지정해 주세요.')
       }
-      return uploadSetlogVideo(me.activePetId, selected, setProgress)
+      return uploadSetlogVideo(me.activePetId, selected, selectedCaption, setProgress)
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['setlogs'] })
@@ -132,6 +135,22 @@ export function SetlogUploadPage() {
         </div>
       )}
 
+      <label className="mt-4 block">
+        <span className="mb-2 block font-medium">캡션 (선택)</span>
+        <textarea
+          value={caption}
+          onChange={(e) => setCaption(e.target.value)}
+          maxLength={MAX_SETLOG_CAPTION_LENGTH}
+          rows={3}
+          disabled={upload.isPending}
+          placeholder="영상에 대한 짧은 글을 남겨 보세요."
+          className={`${inputClass(false)} resize-none`}
+        />
+        <span className="mt-1 block text-right text-[13px] text-muted-foreground">
+          {caption.length}/{MAX_SETLOG_CAPTION_LENGTH}
+        </span>
+      </label>
+
       {upload.isPending && progress && (
         <div className="mt-4" aria-live="polite">
           <div className="mb-2 flex justify-between text-[13px]">
@@ -172,7 +191,7 @@ export function SetlogUploadPage() {
       <div className="mt-6">
         <Button
           disabled={!file || upload.isPending || upload.isSuccess}
-          onClick={() => file && upload.mutate(file)}
+          onClick={() => file && upload.mutate({ file, caption })}
         >
           {upload.isPending ? '업로드 중…' : '올리기'}
         </Button>
