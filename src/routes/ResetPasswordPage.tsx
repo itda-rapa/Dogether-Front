@@ -30,12 +30,18 @@ const codeSchema = z.object({
 })
 
 // 제약은 SignupRequest.password 와 동일하게 맞춘다. 임의로 완화하지 않는다.
-const passwordSchema = z.object({
-  password: z
-    .string()
-    .min(10, '비밀번호는 10자 이상이어야 합니다.')
-    .max(128, '비밀번호는 128자 이하여야 합니다.'),
-})
+const passwordSchema = z
+  .object({
+    password: z
+      .string()
+      .min(10, '비밀번호는 10자 이상이어야 합니다.')
+      .max(128, '비밀번호는 128자 이하여야 합니다.'),
+    confirmPassword: z.string(),
+  })
+  .refine((values) => values.password === values.confirmPassword, {
+    message: '비밀번호가 일치하지 않습니다.',
+    path: ['confirmPassword'],
+  })
 
 type EmailValues = z.input<typeof emailSchema>
 type CodeValues = z.input<typeof codeSchema>
@@ -69,7 +75,7 @@ export function ResetPasswordPage() {
   const passwordForm = useForm<PasswordValues>({
     resolver: zodResolver(passwordSchema),
     mode: 'onTouched',
-    defaultValues: { password: '' },
+    defaultValues: { password: '', confirmPassword: '' },
   })
 
   const codeExpiresIn = useCountdown(challenge?.expiresAt ?? null)
@@ -134,6 +140,7 @@ export function ResetPasswordPage() {
     setSubmitError(null)
     try {
       await resetPassword({
+        email,
         verificationToken: verification.verificationToken,
         newPassword: values.password,
       })
@@ -258,6 +265,23 @@ export function ResetPasswordPage() {
                 aria-invalid={invalid}
                 className={inputClass(invalid)}
                 {...passwordForm.register('password')}
+              />
+            )}
+          </Field>
+
+          <Field
+            label="새 비밀번호 확인"
+            error={passwordForm.formState.errors.confirmPassword?.message}
+          >
+            {({ id, describedBy, invalid }) => (
+              <input
+                id={id}
+                type="password"
+                autoComplete="new-password"
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                className={inputClass(invalid)}
+                {...passwordForm.register('confirmPassword')}
               />
             )}
           </Field>

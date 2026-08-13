@@ -82,6 +82,7 @@ export type EmailVerificationConfirmed = {
  * 동일한 방식으로 재사용한다고 가정했다. 실제 경로·바디는 BE 확정 필요.
  */
 export type PasswordResetRequest = {
+  email: string
   verificationToken: string
   newPassword: string
 }
