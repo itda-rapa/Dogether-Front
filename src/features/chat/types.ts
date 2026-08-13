@@ -17,6 +17,7 @@ export type ChatMessage = {
   roomId: number
   senderType: 'PET' | 'SYSTEM'
   senderPetId: number | null
+  senderPetNickname: string | null
   type: ChatMessageType
   body: string | null
   meetingCardId: number | null
@@ -45,6 +46,32 @@ export type ChatRoom = {
 export type ChatRoomListResult = {
   items: ChatRoom[]
   page: { nextCursor: string | null; hasNext: boolean }
+}
+
+export type OpenChatRoom = {
+  roomId: number
+  title: string
+  description: string | null
+  ownerPetId: number
+  maxParticipants: number
+  /** 상세 조회에서 제공되는 현재 참여 인원. */
+  activeParticipants: number | null
+  isPublic: boolean
+  status: 'ACTIVE' | 'ARCHIVED'
+  origin: 'OPEN_CHAT'
+  createdAt: string
+  updatedAt: string
+}
+
+export type OpenChatRoomPage = {
+  content: OpenChatRoom[]
+  number: number
+  size: number
+  totalElements: number
+  totalPages: number
+  first: boolean
+  last: boolean
+  empty: boolean
 }
 
 export type ChatMessageListResult = {

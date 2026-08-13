@@ -6,6 +6,7 @@ import { useTheme } from '@/app/theme-context'
 import { useAuth } from '@/features/auth/auth-context'
 import { listMyPets } from '@/features/pet/api'
 import { listNeighborhoods } from '@/features/auth/api'
+import { listNotifications } from '@/features/chat/api'
 import { cn } from '@/lib/cn'
 
 /**
@@ -69,6 +70,15 @@ function Header() {
     queryFn: listNeighborhoods,
     enabled: !!me,
   })
+  const notifications = useQuery({
+    queryKey: ['notifications', me?.activePetId],
+    queryFn: listNotifications,
+    enabled: me?.activePetId != null,
+    refetchInterval: 30_000,
+  })
+  const unreadCount = me
+    ? (notifications.data?.filter((item) => !item.readAt).length ?? 0)
+    : 0
 
   const hasActivePet = me?.activePetId != null
   const activePetNickname = pets.data?.find(
@@ -119,7 +129,20 @@ function Header() {
             <MagnifyingGlass size={20} />
           </IconLink>
           <IconLink to="/notifications" label="알림">
-            <Bell size={20} />
+            <span className="relative">
+              <Bell size={20} />
+              {unreadCount > 0 && (
+                <span
+                  aria-hidden
+                  className="absolute -right-2 -top-2 min-w-4 rounded-full bg-like px-1 text-center text-[10px] font-bold leading-4 text-white"
+                >
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+              {unreadCount > 0 && (
+                <span className="sr-only">읽지 않은 알림 {unreadCount}개</span>
+              )}
+            </span>
           </IconLink>
           <IconButton
             label={theme === 'dark' ? '라이트 모드로 전환' : '다크 모드로 전환'}

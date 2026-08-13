@@ -6,6 +6,9 @@ import path from 'node:path'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  define: {
+    global: 'globalThis',
+  },
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
@@ -31,6 +34,11 @@ export default defineConfig({
             proxyReq.removeHeader('origin')
           })
         },
+      },
+      '/ws': {
+        target: process.env.VITE_WS_PROXY_TARGET ?? 'http://localhost:8081',
+        changeOrigin: false,
+        ws: true,
       },
     },
   },

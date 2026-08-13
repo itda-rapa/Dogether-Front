@@ -4,7 +4,10 @@ import type {
   ChatMessageListResult,
   ChatRoom,
   ChatRoomListResult,
+  OpenChatRoom,
+  OpenChatRoomPage,
 } from './types'
+import type { CardDraft } from '@/features/meeting/types'
 
 /** Active Pet 이 Participant 인 방을 lastMessageAt 내림차순으로 반환한다. */
 export function listChatRooms(params?: { cursor?: string; limit?: number }) {
@@ -49,5 +52,107 @@ export function sendChatMessage(
   return apiRequest<ChatMessage>(`/chat/rooms/${roomId}/messages`, {
     method: 'POST',
     body: input,
+  })
+}
+
+export function listOpenChatRooms(page = 0, size = 20) {
+  const q = new URLSearchParams({ page: String(page), size: String(size) })
+  return apiRequest<OpenChatRoomPage>(`/chat/rooms/open?${q.toString()}`)
+}
+
+export function getOpenChatRoom(roomId: number) {
+  return apiRequest<OpenChatRoom>(`/chat/rooms/open/${roomId}`)
+}
+
+export function createOpenChatRoom(input: {
+  title: string
+  description: string | null
+  maxParticipants: number
+  isPublic: boolean
+}) {
+  return apiRequest<OpenChatRoom>('/chat/rooms/open', {
+    method: 'POST',
+    body: input,
+  })
+}
+
+export function joinOpenChatRoom(roomId: number) {
+  return apiRequest<OpenChatRoom>(`/chat/rooms/open/${roomId}/join`, {
+    method: 'POST',
+  })
+}
+
+export type OpenChatInviteResult = {
+  roomId: number
+  targetPetId: number
+  joined: boolean
+  activeParticipants: number
+}
+
+export function inviteFriendToOpenChat(roomId: number, targetPetId: number) {
+  return apiRequest<OpenChatInviteResult>(
+    `/chat/rooms/open/${roomId}/invites`,
+    {
+      method: 'POST',
+      body: { targetPetId },
+    },
+  )
+}
+
+export type OpenChatDraftParticipant = {
+  petId: number
+  nickname: string
+  profileUrl: string | null
+}
+
+export type OpenChatCardDraft = CardDraft & {
+  requestedByPetId: number
+  participantPetIds: number[]
+  participants: OpenChatDraftParticipant[]
+}
+
+export function requestOpenChatCardDraft(roomId: number) {
+  return apiRequest<OpenChatCardDraft[]>(
+    `/chat/rooms/open/${roomId}/card-drafts`,
+    { method: 'POST' },
+  )
+}
+
+export function getOpenChatCardDraft(roomId: number, draftId: number) {
+  return apiRequest<OpenChatCardDraft>(
+    `/chat/rooms/open/${roomId}/card-drafts/${draftId}`,
+  )
+}
+
+export function leaveOpenChatRoom(roomId: number) {
+  return apiRequest<void>(`/chat/rooms/open/${roomId}/leave`, {
+    method: 'DELETE',
+  })
+}
+
+export function deleteOpenChatRoom(roomId: number) {
+  return apiRequest<void>(`/chat/rooms/open/${roomId}`, {
+    method: 'DELETE',
+  })
+}
+
+export type AppNotification = {
+  notificationId: number
+  type: 'OPEN_CHAT_INVITE'
+  roomId: number
+  roomTitle: string
+  actorPetId: number
+  actorPetNickname: string
+  createdAt: string
+  readAt: string | null
+}
+
+export function listNotifications() {
+  return apiRequest<AppNotification[]>('/notifications')
+}
+
+export function markNotificationRead(notificationId: number) {
+  return apiRequest<AppNotification>(`/notifications/${notificationId}/read`, {
+    method: 'PATCH',
   })
 }

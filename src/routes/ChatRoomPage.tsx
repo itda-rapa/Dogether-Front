@@ -51,8 +51,6 @@ export function ChatRoomPage() {
 
   /** 다음 폴링에 넘길 커서. 렌더와 무관하게 즉시 읽혀야 해서 ref 로 둔다. */
   const afterRef = useRef<number | null>(null)
-  /** 재시도 시 같은 값을 보내야 서버 멱등성이 동작하므로 보관한다. */
-  const clientMessageIdRef = useRef<string | null>(null)
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
   const room = useQuery({
@@ -67,6 +65,7 @@ export function ChatRoomPage() {
     queryKey: ['chat', 'messages', roomId],
     queryFn: () => listChatMessages(roomIdNum, afterRef.current),
     enabled: valid && room.isSuccess,
+    refetchOnMount: 'always',
     refetchInterval: MESSAGES_POLL_MS,
     retry: false,
   })
@@ -85,19 +84,13 @@ export function ChatRoomPage() {
   }, [messages.length])
 
   const send = useMutation({
-    mutationFn: (body: string) => {
-      clientMessageIdRef.current ??= crypto.randomUUID()
-      return sendChatMessage(roomIdNum, {
-        clientMessageId: clientMessageIdRef.current,
-        body,
-      })
-    },
+    mutationFn: (message: { clientMessageId: string; body: string }) =>
+      sendChatMessage(roomIdNum, message),
     onSuccess: (created) => {
       setMessages((prev) => mergeMessages(prev, [created]))
       if (created.messageId > (afterRef.current ?? 0)) {
         afterRef.current = created.messageId
       }
-      clientMessageIdRef.current = null
       setDraft('')
       setSendError(null)
     },
@@ -258,8 +251,8 @@ export function ChatRoomPage() {
           onSubmit={(e) => {
             e.preventDefault()
             const body = draft.trim()
-            if (!body || blocked) return
-            send.mutate(body)
+            if (!body || blocked || send.isPending) return
+            send.mutate({ clientMessageId: crypto.randomUUID(), body })
           }}
         >
           <input

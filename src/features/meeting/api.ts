@@ -7,16 +7,32 @@ import type {
 } from './types'
 
 /**
- * AI 약속 카드 초안 생성. 여러 후보가 배열로 온다(항상 1건 이상).
+ * AI 약속 카드 초안 생성. UI에는 항상 후보 배열로 반환한다.
  *
  * 서버는 AI 실패·지연·대화 부족도 오류로 만들지 않고 200 + fallback=true 인
- * 빈 폼 1건짜리 배열로 돌려준다. 따라서 호출이 성공했다고 값이 채워져 있다는
- * 뜻은 아니다.
+ * 빈 폼을 돌려준다. 현재 단건 응답과 향후 다건 응답을 모두 배열로 정규화한다.
+ * 따라서 호출이 성공했다고 값이 채워져 있다는 뜻은 아니다.
  */
-export function createCardDraft(roomId: number) {
-  return apiRequest<CardDraft[]>(`/chat/rooms/${roomId}/card-drafts`, {
-    method: 'POST',
-  })
+export async function createCardDraft(roomId: number): Promise<CardDraft[]> {
+  const response = await apiRequest<CardDraft | CardDraft[] | null>(
+    `/chat/rooms/${roomId}/card-drafts`,
+    {
+      method: 'POST',
+    },
+  )
+
+  // The deployed API currently returns one draft, while newer API versions may
+  // return multiple candidates. Normalize both contracts at the API boundary.
+  if (Array.isArray(response)) return response.filter(isCardDraft)
+  return isCardDraft(response) ? [response] : []
+}
+
+function isCardDraft(value: unknown): value is CardDraft {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Partial<CardDraft>).draftId === 'number'
+  )
 }
 
 export type CreateMeetingCardBody = {
@@ -27,6 +43,8 @@ export type CreateMeetingCardBody = {
   placeText: string
   /** ISO date-time */
   meetAt: string
+  /** Open-chat only. DIRECT chat leaves this undefined. */
+  participantPetIds?: number[]
 }
 
 /** 사용자가 확정 버튼을 눌렀을 때만 호출한다. */

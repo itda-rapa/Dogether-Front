@@ -10,6 +10,10 @@ import { ChatPage } from '@/routes/ChatPage'
 import { ChatRoomPage } from '@/routes/ChatRoomPage'
 import { MeetingDraftPage } from '@/routes/MeetingDraftPage'
 import { ChatNewPage } from '@/routes/ChatNewPage'
+import { OpenChatPage } from '@/routes/OpenChatPage'
+import { OpenChatCreatePage } from '@/routes/OpenChatCreatePage'
+import { OpenChatDetailPage } from '@/routes/OpenChatDetailPage'
+import { OpenChatRoomPage } from '@/routes/OpenChatRoomPage'
 import { MapPage } from '@/routes/MapPage'
 import { PlaceDetailPage } from '@/routes/PlaceDetailPage'
 import { PostDetailPage } from '@/routes/PostDetailPage'
@@ -98,6 +102,10 @@ export default function App() {
                   {/* 채팅 — /chat/new 는 :roomId 보다 먼저 와야 한다 */}
                   <Route path="chat" element={<ChatPage />} />
                   <Route path="chat/new" element={<ChatNewPage />} />
+                  <Route path="chat/open" element={<OpenChatPage />} />
+                  <Route path="chat/open/new" element={<OpenChatCreatePage />} />
+                  <Route path="chat/open/:roomId" element={<OpenChatDetailPage />} />
+                  <Route path="chat/open/:roomId/room" element={<OpenChatRoomPage />} />
                   <Route path="chat/:roomId" element={<ChatRoomPage />} />
                   <Route
                     path="chat/:roomId/meeting/new"

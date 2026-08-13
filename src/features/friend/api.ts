@@ -69,9 +69,13 @@ export function cancelFriendRequest(requestId: number) {
   return apiRequest<void>(`/friend-requests/${requestId}`, { method: 'DELETE' })
 }
 
-export function listFriends(petId: number, cursor?: string | null) {
+export function listFriends(
+  petId: number,
+  cursor?: string | null,
+  limit?: number,
+) {
   return apiRequest<Paged<PetSearchItem>>(
-    withCursor(`/pets/${petId}/friends`, cursor),
+    withCursor(`/pets/${petId}/friends`, cursor, limit),
   )
 }
 

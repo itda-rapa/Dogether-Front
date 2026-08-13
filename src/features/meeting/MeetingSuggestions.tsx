@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { X, Sparkle } from '@phosphor-icons/react'
 import { createCardDraft } from './api'
-import { splitMeetAt, type CardDraft } from './types'
+import { splitDraftDateTime, type CardDraft } from './types'
 
 /**
  * 채팅 입력창 바로 위에 뜨는 AI 약속 제안.
@@ -96,11 +96,13 @@ export function MeetingSuggestions({
     )
   }
 
-  // 서버가 빈 폼을 준 경우다(배열이지만 이때는 항상 1건). 제안할 게 없으므로 띄우지 않는다.
-  if (!draft.data || draft.data.length === 0 || draft.data[0].fallback) return null
+  // fallback/비정상 원소만 온 경우에는 제안할 게 없으므로 띄우지 않는다.
+  const availableDrafts =
+    draft.data?.filter((candidate) => candidate && !candidate.fallback) ?? []
+  if (availableDrafts.length === 0) return null
 
   const suggestions = dedupe(
-    draft.data.map(toSuggestion).filter((s): s is Suggestion => s !== null),
+    availableDrafts.map(toSuggestion).filter((s): s is Suggestion => s !== null),
   )
 
   if (suggestions.length === 0) return null
@@ -178,7 +180,7 @@ type Suggestion = {
  * 아는 게 하나도 없으면 카드를 만들지 않는다.
  */
 function toSuggestion(draft: CardDraft): Suggestion | null {
-  const { date, time } = splitMeetAt(draft.meetAt)
+  const { date, time } = splitDraftDateTime(draft)
   const place = draft.placeText?.trim() || null
   const when = formatWhen(date, time)
 

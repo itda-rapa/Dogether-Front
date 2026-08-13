@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -11,6 +11,11 @@ import { Field } from '@/components/ui/Field'
 import { inputClass } from '@/components/ui/input-class'
 import { cn } from '@/lib/cn'
 import { createCardDraft, createMeetingCard } from '@/features/meeting/api'
+import {
+  getOpenChatCardDraft,
+  requestOpenChatCardDraft,
+  type OpenChatCardDraft,
+} from '@/features/chat/api'
 import {
   CARD_TYPES,
   CARD_TYPE_LABEL,
@@ -54,10 +59,21 @@ export function MeetingDraftPage() {
   const roomIdNum = Number(roomId)
   const [searchParams] = useSearchParams()
   const draftIdParam = searchParams.get('draftId')
+  const openChat = searchParams.get('openChat') === 'true'
+  const selectedDraftId = draftIdParam ? Number(draftIdParam) : null
+  const draftQueryKey = openChat
+    ? ['card-draft', roomId, 'open', selectedDraftId]
+    : ['card-draft', roomId]
 
   const draftQuery = useQuery({
-    queryKey: ['card-draft', roomId],
-    queryFn: () => createCardDraft(roomIdNum),
+    queryKey: draftQueryKey,
+    queryFn: async () => {
+      if (!openChat) return createCardDraft(roomIdNum)
+      if (selectedDraftId != null && Number.isFinite(selectedDraftId)) {
+        return [await getOpenChatCardDraft(roomIdNum, selectedDraftId)]
+      }
+      return requestOpenChatCardDraft(roomIdNum)
+    },
     enabled: Number.isFinite(roomIdNum),
     // 초안 생성은 POST 다. 화면에 들어올 때 한 번만 만들고 자동 재요청하지 않는다.
     // 제안 스트립과 같은 키라 칩을 눌러 들어오면 AI 를 다시 부르지 않는다.
@@ -71,6 +87,8 @@ export function MeetingDraftPage() {
   const drafts = draftQuery.data
   const draft = drafts?.find((d) => String(d.draftId) === draftIdParam) ?? drafts?.[0]
   const aiFilled = draft ? aiFilledMap(draft) : null
+  const openChatDraft = openChat ? (draft as OpenChatCardDraft | undefined) : undefined
+  const [selectedParticipantIds, setSelectedParticipantIds] = useState<number[]>([])
 
   const { register, handleSubmit, reset, watch, formState } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -85,9 +103,18 @@ export function MeetingDraftPage() {
     if (draft) reset(toFormValues(draft))
   }, [draft, reset])
 
+  useEffect(() => {
+    if (openChatDraft) {
+      setSelectedParticipantIds([...openChatDraft.participantPetIds])
+    }
+  }, [openChatDraft])
+
   const createCard = useMutation({
     mutationFn: createMeetingCard,
-    onSuccess: () => navigate(`/chat/${roomId}`, { replace: true }),
+    onSuccess: () => navigate(
+      openChat ? `/chat/open/${roomId}/room` : `/chat/${roomId}`,
+      { replace: true },
+    ),
   })
 
   const onSubmit = handleSubmit((values) => {
@@ -100,6 +127,7 @@ export function MeetingDraftPage() {
       cardType: values.cardType as CardType,
       placeText: values.placeText.trim(),
       meetAt,
+      ...(openChat ? { participantPetIds: selectedParticipantIds } : {}),
     })
   })
 
@@ -194,6 +222,14 @@ export function MeetingDraftPage() {
             )}
           </Field>
 
+          {openChatDraft && (
+            <ParticipantSelector
+              draft={openChatDraft}
+              selectedIds={selectedParticipantIds}
+              onChange={setSelectedParticipantIds}
+            />
+          )}
+
           <Field
             label="시간"
             aiFilled={aiFilled?.time}
@@ -237,7 +273,13 @@ export function MeetingDraftPage() {
           )}
 
           <div className="flex gap-3">
-            <Button type="submit" disabled={createCard.isPending}>
+            <Button
+              type="submit"
+              disabled={
+                createCard.isPending ||
+                (openChat && selectedParticipantIds.length < 2)
+              }
+            >
               {createCard.isPending ? '저장 중…' : '약속 확정'}
             </Button>
             <Button
@@ -252,6 +294,83 @@ export function MeetingDraftPage() {
         </form>
       )}
     </Page>
+  )
+}
+
+function ParticipantSelector({
+  draft,
+  selectedIds,
+  onChange,
+}: {
+  draft: OpenChatCardDraft
+  selectedIds: number[]
+  onChange: (ids: number[]) => void
+}) {
+  const participants = draft.participants?.length
+    ? draft.participants
+    : draft.participantPetIds.map((petId) => ({
+        petId,
+        nickname: `펫 ${petId}`,
+        profileUrl: null,
+      }))
+
+  const toggle = (petId: number, checked: boolean) => {
+    onChange(
+      checked
+        ? [...selectedIds, petId]
+        : selectedIds.filter((id) => id !== petId),
+    )
+  }
+
+  return (
+    <fieldset className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4">
+      <legend className="px-1 font-medium">참여 인원</legend>
+      <div className="mb-1 flex items-center justify-between text-[13px] text-muted-foreground">
+        <span>AI가 대화에서 선별한 참여자입니다.</span>
+        <span>{selectedIds.length}명 선택</span>
+      </div>
+      {participants.map((participant) => (
+        <label
+          key={participant.petId}
+          className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2"
+        >
+          {participant.profileUrl ? (
+            <img
+              src={participant.profileUrl}
+              alt=""
+              className="size-9 rounded-full object-cover"
+            />
+          ) : (
+            <span
+              aria-hidden="true"
+              className="flex size-9 items-center justify-center rounded-full bg-primary-subtle font-semibold text-primary-strong"
+            >
+              {participant.nickname.slice(0, 1)}
+            </span>
+          )}
+          <span className="min-w-0 flex-1 truncate font-medium">
+            {participant.nickname}
+          </span>
+          <input
+            type="checkbox"
+            checked={selectedIds.includes(participant.petId)}
+            disabled={participant.petId === draft.requestedByPetId}
+            onChange={(event) => toggle(participant.petId, event.target.checked)}
+            className="size-5 accent-primary"
+            aria-label={
+              participant.petId === draft.requestedByPetId
+                ? `${participant.nickname} (약속 제안자, 필수 참여)`
+                : participant.nickname
+            }
+          />
+        </label>
+      ))}
+      {selectedIds.length < 2 && (
+        <p role="alert" className="text-[13px] text-destructive">
+          약속에는 최소 2명의 참여자가 필요합니다.
+        </p>
+      )}
+    </fieldset>
   )
 }
 

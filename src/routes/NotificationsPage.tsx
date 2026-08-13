@@ -1,75 +1,103 @@
-import { Link } from 'react-router'
-import { Heart, ChatCircleText, UserPlus, CalendarCheck } from '@phosphor-icons/react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ChatCircleDots } from '@phosphor-icons/react'
+import { useNavigate } from 'react-router'
 import { BackLink } from '@/components/ui/BackLink'
-import { NotConnected } from '@/components/ui/NotConnected'
+import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { useAuth } from '@/features/auth/auth-context'
+import {
+  listNotifications,
+  markNotificationRead,
+  type AppNotification,
+} from '@/features/chat/api'
 import { cn } from '@/lib/cn'
 
-type NotificationKind = 'like' | 'comment' | 'friend' | 'meeting'
-
-const ICONS: Record<NotificationKind, React.ReactNode> = {
-  like: <Heart size={20} weight="fill" />,
-  comment: <ChatCircleText size={20} />,
-  friend: <UserPlus size={20} />,
-  meeting: <CalendarCheck size={20} />,
-}
-
 export function NotificationsPage() {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { me } = useAuth()
+  const notifications = useQuery({
+    queryKey: ['notifications', me?.activePetId],
+    queryFn: listNotifications,
+    enabled: me?.activePetId != null,
+  })
+  const markRead = useMutation({
+    mutationFn: markNotificationRead,
+    onSuccess: (updated) => {
+      queryClient.setQueryData<AppNotification[]>(
+        ['notifications', me?.activePetId],
+        (current) => current?.map((item) =>
+          item.notificationId === updated.notificationId ? updated : item,
+        ),
+      )
+    },
+  })
+
+  const openNotification = (notification: AppNotification) => {
+    if (!notification.readAt) markRead.mutate(notification.notificationId)
+    navigate(`/chat/open/${notification.roomId}/room`)
+  }
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
       <BackLink to="/" label="홈" />
       <h1 className="mt-4 text-2xl font-bold">알림</h1>
 
+      {notifications.isPending && (
+        <p className="mt-6 text-sm text-muted-foreground">알림을 불러오는 중…</p>
+      )}
+      {notifications.isError && (
+        <div className="mt-6">
+          <ApiErrorNotice error={notifications.error} title="알림을 불러오지 못했습니다" />
+        </div>
+      )}
+      {notifications.data?.length === 0 && (
+        <div className="mt-6">
+          <EmptyState title="새 알림이 없습니다" />
+        </div>
+      )}
+
       <ul className="mt-6 flex flex-col gap-2">
-        {PLACEHOLDER.map((n) => (
-          <li key={n.id}>
-            <Link
-              to={n.to}
+        {notifications.data?.map((notification) => (
+          <li key={notification.notificationId}>
+            <button
+              type="button"
+              onClick={() => openNotification(notification)}
               className={cn(
-                'flex items-start gap-3 rounded-xl border p-4 transition-colors hover:bg-primary-subtle',
-                // 안 읽은 알림은 색만이 아니라 좌측 보더 두께로도 구분한다.
-                n.unread
-                  ? 'border-border border-l-4 border-l-primary bg-surface'
-                  : 'border-border bg-surface',
+                'flex w-full items-start gap-3 rounded-xl border p-4 text-left transition-colors hover:bg-primary-subtle',
+                notification.readAt
+                  ? 'border-border bg-surface'
+                  : 'border-border border-l-4 border-l-primary bg-surface',
               )}
             >
-              <span
+              <ChatCircleDots
                 aria-hidden
-                className={cn(
-                  'mt-0.5 shrink-0',
-                  n.kind === 'like' ? 'text-like' : 'text-primary-strong',
-                )}
-              >
-                {ICONS[n.kind]}
-              </span>
+                size={22}
+                className="mt-0.5 shrink-0 text-primary-strong"
+              />
               <div className="min-w-0 flex-1">
-                <p className="text-[15px]">{n.text}</p>
-                <p className="mt-0.5 text-[13px] text-muted-foreground">{n.time}</p>
+                <p className="text-[15px]">
+                  <strong>{notification.actorPetNickname}</strong>님이{' '}
+                  <strong>{notification.roomTitle}</strong> 오픈채팅방에 초대했습니다.
+                </p>
+                <p className="mt-0.5 text-[13px] text-muted-foreground">
+                  {formatTime(notification.createdAt)}
+                </p>
               </div>
-              {n.unread && <span className="sr-only">읽지 않음</span>}
-            </Link>
+              {!notification.readAt && <span className="sr-only">읽지 않음</span>}
+            </button>
           </li>
         ))}
       </ul>
-
-      <div className="mt-8">
-        <NotConnected
-          endpoint="GET /notifications"
-          note="기획상 알림 대상은 좋아요와 댓글입니다. 친구 요청·약속 알림 포함 여부는 확인이 필요합니다."
-        />
-      </div>
     </div>
   )
 }
 
-const PLACEHOLDER: {
-  id: number
-  kind: NotificationKind
-  text: string
-  time: string
-  to: string
-  unread: boolean
-}[] = [
-  { id: 1, kind: 'like', text: '봉이 엄마님이 회원님의 셋로그를 좋아합니다.', time: '5분 전', to: '/', unread: true },
-  { id: 2, kind: 'comment', text: '초록이네님이 댓글을 남겼습니다.', time: '1시간 전', to: '/board/1', unread: true },
-  { id: 3, kind: 'friend', text: '하양이 아빠님이 친구 요청을 보냈습니다.', time: '어제', to: '/me/friends', unread: false },
-]
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value))
+}

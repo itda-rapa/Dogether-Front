@@ -56,6 +56,11 @@ export function configureAuth(accessor: typeof tokenAccessor) {
   tokenAccessor = accessor
 }
 
+/** REST 밖의 STOMP 연결에서 현재 access token을 헤더에 넣을 때만 사용한다. */
+export function getRealtimeAccessToken() {
+  return tokenAccessor?.getAccessToken() ?? null
+}
+
 export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {},

@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { SealCheck, Dog, WarningCircle, ArrowClockwise } from '@phosphor-icons/react'
+import { SealCheck, Dog, WarningCircle, ArrowClockwise, UsersThree } from '@phosphor-icons/react'
 import { Page } from '@/components/ui/Page'
 import { listChatRooms } from '@/features/chat/api'
 import { formatTime, type ChatRoom } from '@/features/chat/types'
@@ -19,6 +19,21 @@ export function ChatPage() {
 
   return (
     <Page title="채팅">
+      <div className="mb-5 flex flex-wrap gap-2">
+        <Link
+          to="/chat/open"
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-5 font-semibold text-on-primary transition-colors hover:bg-primary-hover"
+        >
+          <UsersThree size={19} weight="bold" />
+          오픈채팅 둘러보기
+        </Link>
+        <Link
+          to="/chat/new"
+          className="inline-flex min-h-11 items-center rounded-lg border-2 border-primary px-5 font-semibold text-primary-strong transition-colors hover:bg-primary-subtle"
+        >
+          1:1 채팅 찾기
+        </Link>
+      </div>
       {rooms.isPending && <p className="text-muted-foreground">불러오는 중…</p>}
 
       {rooms.isError && <RoomsError error={rooms.error} onRetry={() => void rooms.refetch()} />}

@@ -34,14 +34,16 @@ export type FallbackReason =
  * POST /chat/rooms/{roomId}/card-drafts 응답 배열의 원소. 응답은 `CardDraft[]`이며
  * 항상 1건 이상이다(후보가 없으면 fallback=true 인 빈 폼 1건).
  *
- * meetAt 은 단일 date-time 이다. AI 가 시각을 못 뽑으면 meetAt 만 null 이 되고
- * placeText·cardType 은 살아서 온다. 그 경우에도 카드는 성립한다.
+ * date/time 은 AI가 추출한 부분값이다. 둘 다 유효할 때만 meetAt도 채워진다.
+ * 따라서 날짜 없이 시각만 나온 대화도 time을 잃지 않는다.
  */
 export type CardDraft = {
   draftId: number
   roomId: number
   cardType: CardType | null
   placeText: string | null
+  date: string | null
+  time: string | null
   meetAt: string | null
   /** true 면 AI 가 값을 뽑지 못한 빈 폼이다. 오류가 아니다. */
   fallback: boolean
@@ -105,6 +107,15 @@ export function splitMeetAt(meetAt: string | null): { date: string; time: string
   }
 }
 
+/** 절대 시각이 없으면 AI가 추출한 날짜·시각 부분값을 그대로 사용한다. */
+export function splitDraftDateTime(draft: CardDraft): { date: string; time: string } {
+  const combined = splitMeetAt(draft.meetAt)
+  return {
+    date: combined.date || draft.date || '',
+    time: combined.time || draft.time || '',
+  }
+}
+
 /** 날짜/시간 입력을 하나의 ISO date-time 으로 합친다. 로컬 시간대로 해석한다. */
 export function joinMeetAt(date: string, time: string): string | null {
   if (!date || !time) return null
@@ -113,7 +124,7 @@ export function joinMeetAt(date: string, time: string): string | null {
 }
 
 export function toFormValues(draft: CardDraft): DraftFormValues {
-  const { date, time } = splitMeetAt(draft.meetAt)
+  const { date, time } = splitDraftDateTime(draft)
   return {
     cardType: isCardType(draft.cardType) ? draft.cardType : '',
     date,
@@ -124,7 +135,7 @@ export function toFormValues(draft: CardDraft): DraftFormValues {
 
 /** 어떤 항목을 AI 가 채웠는지. 사용자가 확인해야 할 값임을 표시하는 데 쓴다. */
 export function aiFilledMap(draft: CardDraft) {
-  const { date, time } = splitMeetAt(draft.meetAt)
+  const { date, time } = splitDraftDateTime(draft)
   return {
     cardType: isCardType(draft.cardType),
     date: date !== '',
