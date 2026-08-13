@@ -3,9 +3,16 @@ import { Heart, Storefront } from '@phosphor-icons/react'
 import { BackLink } from '@/components/ui/BackLink'
 import { NotConnected } from '@/components/ui/NotConnected'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useAuth } from '@/features/auth/auth-context'
+import { PLACEHOLDER_PLACES } from '@/features/places/placeholderPlaces'
+import { listLikedPlaceIds } from '@/features/places/likedPlaces'
 
 /** 지도에서 하트를 누른 장소가 쌓이는 곳. */
 export function PlacesPage() {
+  const { me } = useAuth()
+  const likedIds = me == null ? [] : listLikedPlaceIds(me.userId)
+  const liked = PLACEHOLDER_PLACES.filter((p) => likedIds.includes(p.id))
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
       <BackLink to="/me" label="마이 페이지" />
@@ -14,7 +21,7 @@ export function PlacesPage() {
         지도에서 하트를 누른 장소가 모입니다.
       </p>
 
-      {PLACEHOLDER.length === 0 ? (
+      {liked.length === 0 ? (
         <div className="mt-6">
           <EmptyState
             title="저장한 장소가 없습니다"
@@ -31,7 +38,7 @@ export function PlacesPage() {
         </div>
       ) : (
         <ul className="mt-6 flex flex-col gap-2">
-          {PLACEHOLDER.map((p) => (
+          {liked.map((p) => (
             <li key={p.id}>
               <Link
                 to={`/map/${p.id}`}
@@ -67,7 +74,3 @@ export function PlacesPage() {
     </div>
   )
 }
-
-const PLACEHOLDER = [
-  { id: 1, name: '시흥동물병원', address: '경기 성남시 수정구 시흥동 12-3' },
-]

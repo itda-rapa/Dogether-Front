@@ -4,15 +4,24 @@ import { CircleNotch, Heart, MapPin, Storefront, Warning } from '@phosphor-icons
 import { Page } from '@/components/ui/Page'
 import { NotConnected } from '@/components/ui/NotConnected'
 import { cn } from '@/lib/cn'
-
-const FILTERS = ['약국', '병원', '카페', '호텔'] as const
+import { useAuth } from '@/features/auth/auth-context'
+import {
+  PLACE_CATEGORIES,
+  PLACEHOLDER_PLACES,
+  type PlaceCategory,
+  type PlaceholderPlace,
+} from '@/features/places/placeholderPlaces'
+import { isPlaceLiked, setPlaceLiked } from '@/features/places/likedPlaces'
 
 type GeoStatus = 'idle' | 'pending' | 'granted' | 'denied'
 
 export function MapPage() {
+  const { me } = useAuth()
   const [params, setParams] = useSearchParams()
-  const active = params.get('filter') ?? '약국'
+  const active = (params.get('filter') as PlaceCategory) ?? PLACE_CATEGORIES[0]
   const likedOnly = params.get('liked') === '1'
+  /* localStorage 는 리액트 state 가 아니라 하트를 눌러도 리렌더가 안 걸린다. 틱으로 강제한다. */
+  const [, bumpLikedTick] = useState(0)
 
   /*
     채팅 팝업(B-3)에서 "지도에서 보기"를 눌렀을 때만 위치 권한을 묻는다.
@@ -39,10 +48,14 @@ export function MapPage() {
     )
   }, [wantsLocate, geoStatus])
 
+  const visiblePlaces = PLACEHOLDER_PLACES.filter((p) =>
+    likedOnly ? me != null && isPlaceLiked(me.userId, p.id) : p.category === active,
+  )
+
   return (
     <Page title="지도">
       <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
-        {FILTERS.map((f) => (
+        {PLACE_CATEGORIES.map((f) => (
           <button
             key={f}
             aria-pressed={active === f && !likedOnly}
@@ -122,12 +135,26 @@ export function MapPage() {
       </h2>
 
       <ul className="mb-6 flex flex-col gap-2">
-        {PLACEHOLDER_PLACES.map((p) => (
+        {visiblePlaces.map((p) => (
           <li key={p.id}>
-            <PlaceRow place={p} />
+            <PlaceRow
+              place={p}
+              liked={me != null && isPlaceLiked(me.userId, p.id)}
+              onToggleLiked={(next) => {
+                if (me == null) return
+                setPlaceLiked(me.userId, p.id, next)
+                bumpLikedTick((t) => t + 1)
+              }}
+            />
           </li>
         ))}
       </ul>
+
+      {visiblePlaces.length === 0 && (
+        <p className="mb-6 text-[14px] text-muted-foreground">
+          {likedOnly ? '아직 찜한 장소가 없습니다.' : '해당 분류의 장소가 없습니다.'}
+        </p>
+      )}
 
       <NotConnected
         endpoint={
@@ -146,46 +173,43 @@ export function MapPage() {
   )
 }
 
-type PlaceholderPlace = {
-  id: number
-  name: string
-  address: string
-  distance: string
+function PlaceRow({
+  place,
+  liked,
+  onToggleLiked,
+}: {
+  place: PlaceholderPlace
   liked: boolean
-}
-
-const PLACEHOLDER_PLACES: PlaceholderPlace[] = [
-  { id: 1, name: '시흥동물병원', address: '경기 성남시 수정구 시흥동 12-3', distance: '320m', liked: true },
-  { id: 2, name: '멍멍약국', address: '경기 성남시 수정구 시흥동 45-1', distance: '540m', liked: false },
-  { id: 3, name: '펫프렌들리 카페', address: '경기 성남시 수정구 금토동 8', distance: '1.2km', liked: false },
-]
-
-function PlaceRow({ place }: { place: PlaceholderPlace }) {
+  onToggleLiked: (next: boolean) => void
+}) {
   return (
-    <Link
-      to={`/map/${place.id}`}
-      className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:bg-primary-subtle"
-    >
-      <div
-        aria-hidden
-        className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-      >
-        <Storefront size={22} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold">{place.name}</p>
-        <p className="truncate text-[14px] text-muted-foreground">
-          {place.address}
-        </p>
-      </div>
-      <div className="flex shrink-0 flex-col items-end gap-1">
-        <span className="text-[13px] tabular-nums text-muted-foreground">
+    <div className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:bg-primary-subtle">
+      <Link to={`/map/${place.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+        <div
+          aria-hidden
+          className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
+        >
+          <Storefront size={22} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold">{place.name}</p>
+          <p className="truncate text-[14px] text-muted-foreground">
+            {place.address}
+          </p>
+        </div>
+        <span className="shrink-0 text-[13px] tabular-nums text-muted-foreground">
           {place.distance}
         </span>
-        {place.liked && (
-          <Heart size={16} weight="fill" className="text-like" aria-label="찜한 장소" />
-        )}
-      </div>
-    </Link>
+      </Link>
+      <button
+        type="button"
+        aria-pressed={liked}
+        aria-label={liked ? '찜 해제' : '찜하기'}
+        onClick={() => onToggleLiked(!liked)}
+        className="grid size-11 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-primary-subtle"
+      >
+        <Heart size={18} weight={liked ? 'fill' : 'regular'} className={liked ? 'text-like' : undefined} />
+      </button>
+    </div>
   )
 }

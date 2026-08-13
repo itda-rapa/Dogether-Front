@@ -5,6 +5,9 @@ import { cn } from '@/lib/cn'
 type Props = {
   count: number
   defaultLiked?: boolean
+  /** 넘기면 내부 state 대신 이 값을 쓴다(controlled). onToggle 과 함께 쓴다. */
+  liked?: boolean
+  onToggle?: (next: boolean) => void
 }
 
 /**
@@ -15,15 +18,22 @@ type Props = {
  *
  * 상태를 색으로만 구분하지 않는다 — 외곽선 <-> 채움 형태 변화를 반드시 동반한다.
  */
-export function LikeButton({ count, defaultLiked = false }: Props) {
-  const [liked, setLiked] = useState(defaultLiked)
+export function LikeButton({ count, defaultLiked = false, liked: controlledLiked, onToggle }: Props) {
+  const [internalLiked, setInternalLiked] = useState(defaultLiked)
+  const liked = controlledLiked ?? internalLiked
+
+  const toggle = () => {
+    const next = !liked
+    if (controlledLiked === undefined) setInternalLiked(next)
+    onToggle?.(next)
+  }
 
   return (
     <button
       type="button"
       aria-pressed={liked}
       aria-label={liked ? '좋아요 취소' : '좋아요'}
-      onClick={() => setLiked((v) => !v)}
+      onClick={toggle}
       className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 transition-colors hover:bg-primary-subtle"
     >
       <Heart
