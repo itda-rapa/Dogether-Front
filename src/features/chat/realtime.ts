@@ -33,7 +33,7 @@ export type OpenChatDraftNotification = {
   drafts: OpenChatDraft[]
 }
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? '/ws'
+const WS_URL = import.meta.env.VITE_WS_URL ?? '/open-chat-ws'
 
 export function subscribeToChatRoom(
   roomId: number,

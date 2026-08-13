@@ -48,6 +48,21 @@ export default defineConfig({
           })
         },
       },
+      // Open chat uses SockJS and is served by dogether-consumer (default port 8081).
+      '/open-chat-ws': {
+        target:
+          process.env.VITE_CONSUMER_PROXY_TARGET ?? 'http://localhost:8081',
+        ws: true,
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.removeHeader('origin')
+          })
+          proxy.on('proxyReqWs', (proxyReq) => {
+            proxyReq.removeHeader('origin')
+          })
+        },
+      },
     },
   },
 })

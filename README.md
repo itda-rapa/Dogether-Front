@@ -39,6 +39,8 @@ npm run dev
 |---|---|---|
 | `VITE_API_BASE_URL` | `/api` | API 클라이언트(`src/lib/api.ts`)가 사용하는 베이스 URL |
 | `VITE_API_PROXY_TARGET` | `http://localhost:8080` | 개발 서버 프록시가 바라볼 백엔드 주소 |
+| `VITE_WS_URL` | `/open-chat-ws` | 오픈채팅 SockJS 엔드포인트 |
+| `VITE_CONSUMER_PROXY_TARGET` | `http://localhost:8081` | 개발 서버의 오픈채팅 SockJS 프록시가 바라볼 consumer 주소 |
 
 ## 스크립트
 
