@@ -248,10 +248,10 @@ export function MePage() {
           <ul className="overflow-hidden rounded-xl border border-border bg-surface">
             <li>
               <Link
-                to="/admin/reports"
+                to="/admin"
                 className="flex min-h-11 items-center justify-between px-4 py-3 transition-colors hover:bg-primary-subtle"
               >
-                <span>신고 처리</span>
+                <span>관리자 페이지</span>
                 <CaretRight size={18} className="text-muted-foreground" />
               </Link>
             </li>

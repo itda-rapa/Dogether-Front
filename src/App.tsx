@@ -30,6 +30,8 @@ import {
   AdminReportsPage,
   AdminReportDetailPage,
 } from '@/routes/admin/AdminReportsPage'
+import { AdminHomePage } from '@/routes/admin/AdminHomePage'
+import { AdminBoardsPage } from '@/routes/admin/AdminBoardsPage'
 import { FriendsPage } from '@/routes/FriendsPage'
 import { FriendSearchPage } from '@/routes/FriendSearchPage'
 import { PlacesPage } from '@/routes/PlacesPage'
@@ -131,6 +133,8 @@ export default function App() {
 
                   {/* 관리자 전용 */}
                   <Route element={<RequireAdmin />}>
+                    <Route path="admin" element={<AdminHomePage />} />
+                    <Route path="admin/boards" element={<AdminBoardsPage />} />
                     <Route path="admin/reports" element={<AdminReportsPage />} />
                     <Route
                       path="admin/reports/:reportId"

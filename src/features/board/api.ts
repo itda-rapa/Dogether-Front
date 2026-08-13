@@ -11,6 +11,24 @@ export function listBoards() {
   return apiRequest<Board[]>('/boards')
 }
 
+/** 관리자 전용. 게시판 이름은 30자 이내, 서버가 중복 이름을 409 BOARD_NAME_DUPLICATED로 거절한다. */
+export function createBoard(name: string) {
+  return apiRequest<Board>('/admin/boards', { method: 'POST', body: { name } })
+}
+
+/**
+ * 관리자 전용. strict PATCH — name·version 둘 다 필수다.
+ * version이 최신이 아니면 409 CONCURRENT_UPDATE_CONFLICT.
+ */
+export function updateBoard(boardId: number, body: { name: string; version: number }) {
+  return apiRequest<Board>(`/admin/boards/${boardId}`, { method: 'PATCH', body })
+}
+
+/** 관리자 전용. 게시글이 하나라도 있는 게시판은 409 BOARD_NOT_EMPTY로 거절된다. */
+export function deleteBoard(boardId: number) {
+  return apiRequest<void>(`/admin/boards/${boardId}`, { method: 'DELETE' })
+}
+
 export function listBoardPosts(
   boardId: number,
   params: { cursor?: string; size?: number } = {},
