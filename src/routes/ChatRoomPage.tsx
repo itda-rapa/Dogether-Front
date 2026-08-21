@@ -100,6 +100,15 @@ export function ChatRoomPage() {
     bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [messages.length])
 
+  /*
+    내가 보낸 메시지가 실제로 저장된 순간에만 바뀌는 값.
+    send.data 를 직접 읽으면 안 된다 — React Query 는 mutate 마다 새 Mutation 을
+    만들어 상태를 초기화하므로 전송 중에는 data 가 undefined 다. 그러면 값이
+    messageId -> 0 -> 새 messageId 로 두 번 움직여 AI 초안이 두 번 호출되고,
+    그중 첫 번째는 메시지가 저장되기 전 대화로 나간다.
+  */
+  const [draftSourceVersion, setDraftSourceVersion] = useState(0)
+
   const send = useMutation({
     mutationFn: async (body: string): Promise<ChatMessage | { messageId: number }> => {
       clientMessageIdRef.current ??= crypto.randomUUID()
@@ -121,6 +130,7 @@ export function ChatRoomPage() {
       if (result.messageId > (afterRef.current ?? 0)) {
         afterRef.current = result.messageId
       }
+      setDraftSourceVersion(result.messageId)
       clientMessageIdRef.current = null
       setDraft('')
       setSendError(null)
@@ -140,18 +150,6 @@ export function ChatRoomPage() {
     () => canDraftMeeting(messagesSinceLastCard),
     [messagesSinceLastCard],
   )
-  const draftSourceVersion = useMemo(
-    () =>
-      messagesSinceLastCard.reduce(
-        (latest, message) =>
-          message.type === 'TEXT' && message.senderType === 'PET'
-            ? Math.max(latest, message.messageId)
-            : latest,
-        0,
-      ),
-    [messagesSinceLastCard],
-  )
-
   // 방금 내가 보낸 마지막 메시지에서만 판단한다. 상대가 답장하면 사라진다.
   const lastMessage = messages[messages.length - 1]
   const counterpartPetId = room.data?.counterpartPet.petId

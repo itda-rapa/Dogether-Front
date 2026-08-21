@@ -15,7 +15,9 @@ import { splitDraftDateTime, type CardDraft } from './types'
  * - 최근 24시간 내 사용자 TEXT 2건 이상일 때만 호출한다 (enabled)
  * - AI 호출은 비싸고 느리다. 조건이 됐다고 바로 부르지 않고, 먼저
  *   "약속을 잡아볼까요?" 로 물어서 사용자가 동의해야 그때 초안을 만든다
- * - 한 번 동의하면 그 방에서는 다시 묻지 않는다. 이후 새 대화가 생기면 자동 재조회한다
+ * - 한 번 동의하면 그 방에서는 다시 묻지 않는다. 이후 내가 보내기를 눌러
+ *   메시지 전송에 성공할 때마다 자동 재조회한다 (상대 메시지 도착이나 폴링
+ *   자체는 트리거가 아니다 — 실시간으로 대화를 감시하지 않는다)
  * - fallback=true(대화 부족·AI 실패)면 아무것도 띄우지 않는다. 상단 버튼이 그 경우를 담당한다
  * - 눌러도 바로 확정하지 않는다. 확인 화면으로 보낸다
  */
@@ -27,7 +29,7 @@ export function MeetingSuggestions({
 }: {
   roomId: number
   enabled: boolean
-  /** 최근 24시간 사용자 TEXT 중 가장 최신 messageId. 새 대화가 생기면 재추출한다. */
+  /** 내가 마지막으로 보낸 메시지의 messageId. 보내기가 성공할 때마다 바뀐다. */
   sourceVersion: number
   /** 사용자가 입력창에 뭔가 치고 있는지. true가 되면 별도 닫기 없이 스트립을 숨긴다. */
   typing: boolean
