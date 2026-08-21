@@ -76,15 +76,15 @@ export function updatePet(petId: number, body: PetWriteBody) {
 /**
  * 펫 프로필 사진 등록/교체.
  *
- * ⚠️ 제안 단계 엔드포인트, M1 계약에 없다. 위 PATCH /pets/{petId} 전체 수정과
- * 별개로, 사진 하나만 다루도록 좁혀서 새로 제안한다. `mediaId` 는
- * features/media/api 의 `uploadMedia` 로 저장을 먼저 끝낸 미디어의 id.
- * docs/handover/profile-avatar-be.md 참고. "사진 AI 완전 폐기"(v13 D-01)는
- * AI 분석·인증 파이프라인 폐기였지, 단순 이미지 저장까지 막는 결정은 아니었다.
+ * 위 PATCH /pets/{petId} 전체 수정과 별개로, 사진 하나만 다루는 전용
+ * 엔드포인트다. `mediaId` 는 features/media/api 의 `uploadMedia` 로 저장을
+ * 먼저 끝낸 미디어의 id. 백엔드가 POST 로 구현했다(PetController
+ * @PostMapping) — docs/handover/profile-avatar-be.md 의 PATCH 제안은
+ * 최종 계약이 아니었다.
  */
 export function updatePetProfileImage(petId: number, mediaId: number) {
   return apiRequest<Pet>(`/pets/${petId}/profile-image`, {
-    method: 'PATCH',
+    method: 'POST',
     body: { mediaId },
   })
 }
