@@ -126,6 +126,53 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+   PawLoader 전용 키프레임
+   컴포넌트는 src/components/ui/PawLoader.tsx 하나뿐이다.
+   전부 opacity/transform 만 건드려 컴포지터에서 처리되게 한다.
+   --------------------------------------------------------------------------- */
+@keyframes dg-dog-bounce {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(-2.5deg);
+  }
+}
+
+@keyframes dg-paw-pop {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  42% {
+    opacity: 1;
+  }
+}
+
+@keyframes dg-dash-dart {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+  45% {
+    opacity: 0.85;
+    transform: translateX(0);
+  }
+}
+
+@keyframes dg-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  45% {
+    opacity: 1;
+  }
+}
+
 /* 모션은 의미 전달용으로만. 사용자가 꺼두면 전부 비활성화한다. */
 @media (prefers-reduced-motion: reduce) {
   *,
