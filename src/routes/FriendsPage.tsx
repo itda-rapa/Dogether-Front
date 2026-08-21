@@ -5,7 +5,6 @@ import { Dog, UserPlus, SealCheck } from '@phosphor-icons/react'
 import { BackLink } from '@/components/ui/BackLink'
 import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { NotConnected } from '@/components/ui/NotConnected'
 import { useAuth } from '@/features/auth/auth-context'
 import {
   listFriends,
@@ -14,6 +13,7 @@ import {
   acceptFriendRequest,
   rejectFriendRequest,
   cancelFriendRequest,
+  deleteFriend,
   type FriendRequest,
 } from '@/features/friend/api'
 import type { PetSearchItem } from '@/features/chat/types'
@@ -83,12 +83,18 @@ export function FriendsPage() {
 function FriendList() {
   const { me } = useAuth()
   const petId = me?.activePetId ?? null
+  const queryClient = useQueryClient()
 
   const friends = useQuery({
     queryKey: ['friends', petId],
     queryFn: () => listFriends(petId as number),
     enabled: petId !== null,
     retry: false,
+  })
+
+  const remove = useMutation({
+    mutationFn: (friendPetId: number) => deleteFriend(petId as number, friendPetId),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['friends', petId] }),
   })
 
   // Active Pet 이 없으면 목록 자체가 성립하지 않는다. 에러가 아니라 안내로 처리한다.
@@ -134,17 +140,23 @@ function FriendList() {
           >
             <Avatar />
             <Info pet={f} />
+            <button
+              type="button"
+              disabled={remove.isPending}
+              onClick={() => {
+                if (window.confirm(`${f.nickname}과(와) 친구를 끊을까요? 대화 이력은 남지만 다시 메시지를 보내려면 재요청이 필요합니다.`)) {
+                  remove.mutate(f.petId)
+                }
+              }}
+              className="min-h-11 shrink-0 rounded-lg border border-border px-3 font-medium text-muted-foreground transition-colors hover:bg-primary-subtle disabled:opacity-50"
+            >
+              삭제
+            </button>
           </li>
         ))}
       </ul>
 
-      {/* 친구 삭제는 백엔드에 DELETE 가 아직 없다. 버튼을 두면 404 만 난다. */}
-      <div className="mt-6">
-        <NotConnected
-          endpoint="DELETE /pets/{petId}/friends/{friendPetId}"
-          note="친구 삭제 API 가 아직 없어 삭제 버튼을 노출하지 않습니다."
-        />
-      </div>
+      <ActionError error={remove.error} />
       {friends.data.page.hasNext && <MoreHint />}
     </>
   )
