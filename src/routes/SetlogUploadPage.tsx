@@ -5,6 +5,7 @@ import { CheckCircle, FilmSlate, UploadSimple, WarningCircle } from '@phosphor-i
 import { Page } from '@/components/ui/Page'
 import { Button } from '@/components/ui/Button'
 import {
+  getSetlogVideoDurationError,
   getSetlogVideoError,
   SetlogUploadError,
   uploadSetlogVideo,
@@ -23,6 +24,7 @@ export function SetlogUploadPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [selectionError, setSelectionError] = useState<string | null>(null)
   const [progress, setProgress] = useState<SetlogUploadProgress | null>(null)
+  const [checkingDuration, setCheckingDuration] = useState(false)
 
   useEffect(() => {
     if (!file) {
@@ -47,10 +49,16 @@ export function SetlogUploadPage() {
     },
   })
 
-  const chooseFile = (selected: File | undefined) => {
+  const selectionTokenRef = useRef(0)
+
+  const chooseFile = async (selected: File | undefined) => {
     upload.reset()
     setProgress(null)
     if (!selected) return
+
+    const token = ++selectionTokenRef.current
+    setCheckingDuration(false)
+
     const error = getSetlogVideoError(selected)
     if (error) {
       setFile(null)
@@ -58,8 +66,18 @@ export function SetlogUploadPage() {
       if (inputRef.current) inputRef.current.value = ''
       return
     }
+
     setFile(selected)
     setSelectionError(null)
+    setCheckingDuration(true)
+    const durationError = await getSetlogVideoDurationError(selected)
+    if (token !== selectionTokenRef.current) return
+    setCheckingDuration(false)
+    if (durationError) {
+      setFile(null)
+      setSelectionError(durationError)
+      if (inputRef.current) inputRef.current.value = ''
+    }
   }
 
   if (!me?.activePetId) {
@@ -110,6 +128,7 @@ export function SetlogUploadPage() {
         type="file"
         accept="video/mp4,video/webm"
         className="sr-only"
+        disabled={checkingDuration || upload.isPending}
         onChange={(e) => chooseFile(e.target.files?.[0])}
       />
       <Button
@@ -130,6 +149,12 @@ export function SetlogUploadPage() {
             <p className="text-[13px] text-muted-foreground">{formatBytes(file.size)}</p>
           </div>
         </div>
+      )}
+
+      {checkingDuration && (
+        <p className="mt-4 text-[13px] text-muted-foreground" aria-live="polite">
+          영상 길이를 확인하는 중…
+        </p>
       )}
 
       {upload.isPending && progress && (
@@ -171,7 +196,7 @@ export function SetlogUploadPage() {
 
       <div className="mt-6">
         <Button
-          disabled={!file || upload.isPending || upload.isSuccess}
+          disabled={!file || checkingDuration || upload.isPending || upload.isSuccess}
           onClick={() => file && upload.mutate(file)}
         >
           {upload.isPending ? '업로드 중…' : '올리기'}

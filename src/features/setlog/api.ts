@@ -11,6 +11,9 @@ import type {
 
 const MAX_SETLOG_UPLOAD_BYTES = 200 * 1024 * 1024
 const SETLOG_CONTENT_TYPES = ['video/mp4', 'video/webm']
+const MIN_SETLOG_DURATION_SECONDS = 3
+const MAX_SETLOG_DURATION_SECONDS = 5
+const DURATION_PROBE_TIMEOUT_MS = 8000
 
 export class SetlogUploadError extends Error {
   constructor(message: string) {
@@ -74,8 +77,62 @@ export function getSetlogVideoError(file: File): string | null {
   if (!SETLOG_CONTENT_TYPES.includes(file.type)) {
     return 'MP4 또는 WebM 영상만 올릴 수 있습니다.'
   }
-  if (file.size > MAX_SETLOG_UPLOAD_BYTES) {
+  if (file.size <= 0 || file.size > MAX_SETLOG_UPLOAD_BYTES) {
     return '영상은 200MB 이하만 올릴 수 있습니다.'
+  }
+  return null
+}
+
+/**
+ * 손상되거나 메타데이터를 끝내 못 읽는 파일은 `onloadedmetadata`/`onerror`가
+ * 둘 다 안 불릴 수 있다. 타임아웃 없이는 "확인하는 중" 상태가 무한정 멈춘다.
+ */
+function readVideoDuration(file: File): Promise<number> {
+  const objectUrl = URL.createObjectURL(file)
+
+  const probe = new Promise<number>((resolve, reject) => {
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => resolve(video.duration)
+    video.onerror = () => reject(new SetlogUploadError('영상 정보를 읽을 수 없습니다.'))
+    video.src = objectUrl
+  })
+
+  let timeoutId: ReturnType<typeof setTimeout>
+  const timeout = new Promise<number>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new SetlogUploadError('영상 정보를 읽을 수 없습니다.')),
+      DURATION_PROBE_TIMEOUT_MS,
+    )
+  })
+
+  return Promise.race([probe, timeout]).finally(() => {
+    clearTimeout(timeoutId)
+    URL.revokeObjectURL(objectUrl)
+    probe.catch(() => {})
+  })
+}
+
+/**
+ * 형식·크기 검사를 통과한 뒤에만 호출한다. `video.duration`은 부동소수점이므로
+ * 반올림하지 않고 원본 값으로 3~5초 경계를 판정한다(5.01초는 초과로 처리).
+ *
+ * 이 검사는 사용자 안내용 선검사일 뿐이다. 백엔드가 S3의 실제 파일을 최종
+ * 검증하므로, 이걸 통과해도 완료 API가 거절할 수 있다.
+ */
+export async function getSetlogVideoDurationError(file: File): Promise<string | null> {
+  let duration: number
+  try {
+    duration = await readVideoDuration(file)
+  } catch {
+    return '영상 정보를 읽을 수 없습니다.'
+  }
+  if (
+    !Number.isFinite(duration) ||
+    duration < MIN_SETLOG_DURATION_SECONDS ||
+    duration > MAX_SETLOG_DURATION_SECONDS
+  ) {
+    return '셋로그 영상은 3초 이상 5초 이하만 올릴 수 있어요.'
   }
   return null
 }
@@ -94,6 +151,9 @@ export async function uploadSetlogVideo(
 ): Promise<Setlog> {
   const validationError = getSetlogVideoError(file)
   if (validationError) throw new SetlogUploadError(validationError)
+
+  const durationError = await getSetlogVideoDurationError(file)
+  if (durationError) throw new SetlogUploadError(durationError)
 
   onProgress?.({ stage: 'initializing', uploadedBytes: 0, totalBytes: file.size })
 
