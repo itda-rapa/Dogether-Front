@@ -28,7 +28,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: '홈', icon: House },
   { to: '/board', label: '게시판', icon: Article },
-  { to: '/upload', label: '업로드', icon: Plus, emphasized: true },
+  { to: '/setlogs/new', label: '업로드', icon: Plus, emphasized: true },
   { to: '/chat', label: '채팅', icon: ChatCircle },
   { to: '/map', label: '지도', icon: MapTrifold },
 ]
