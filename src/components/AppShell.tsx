@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
 import { MagnifyingGlass, Bell, Sun, Moon } from '@phosphor-icons/react'
 import { NAV_ITEMS } from '@/app/navigation'
+import { BrandWave, MainWave, PawScatter } from '@/components/ui/decor'
 import { useTheme } from '@/app/theme-context'
 import { useAuth } from '@/features/auth/auth-context'
 import { listMyPets } from '@/features/pet/api'
@@ -25,6 +26,8 @@ export function AppShell() {
       나머지 절반은 main 쪽 주석 참고.
     */
     <div className="flex min-h-dvh flex-col md:flex-row">
+      <PawScatter />
+      <MainWave />
       <Sidebar />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -201,14 +204,25 @@ function IconButton({
 
 function Sidebar() {
   return (
-    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 border-r border-border bg-surface px-3 py-4 md:block">
-      <Link to="/" className="flex items-center gap-2 px-3 pb-6 text-xl font-bold text-primary-strong">
+    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 overflow-hidden border-r border-border bg-surface px-3 py-4 md:block">
+      {/*
+        메뉴가 6개뿐이라 아래가 늘 빈다. 겹칠 요소가 없는 자리라 웨이브로 채운다.
+        MainWave 와 같은 기준(w-screen, -bottom-2, h-36)으로 그린 뒤 aside 의
+        overflow-hidden 으로 왼쪽 240px 만 남긴다. 폭/높이/바닥을 하나라도
+        다르게 두면 사이드바 경계에서 파형이 끊겨 보인다.
+      */}
+      <BrandWave className="pointer-events-none absolute -bottom-2 left-0 h-36 w-screen" />
+      <Link to="/" className="relative flex items-center gap-2 px-3 pb-6 text-xl font-bold text-primary-strong">
         <img src="/logo-mark.png" alt="" className="size-6 shrink-0" />
         Dogether
       </Link>
 
-      {/* 하단 탭바와 동시에 DOM 에 존재하므로 landmark 라벨을 구분한다 */}
-      <nav aria-label="주요 메뉴 (사이드바)">
+      {/*
+        하단 탭바와 동시에 DOM 에 존재하므로 landmark 라벨을 구분한다.
+        relative 는 위 웨이브(absolute)보다 뒤 DOM 순서로 위에 그려지게 하려는 것 —
+        화면이 짧아 둘이 겹쳐도 메뉴가 가려지지 않는다.
+      */}
+      <nav aria-label="주요 메뉴 (사이드바)" className="relative">
         <ul className="flex flex-col gap-1">
           {NAV_ITEMS.map(({ to, label, icon: Icon, emphasized }) => (
             <li key={to}>

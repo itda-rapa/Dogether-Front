@@ -79,8 +79,9 @@ export function listFriends(
   )
 }
 
-/*
-  친구 삭제(`DELETE /pets/{petId}/friends/{friendPetId}`)는 두지 않는다.
-  origin/dev 의 PetFriendController 에는 @GetMapping 하나뿐이라 호출하면 404 다.
-  BE-3 가 엔드포인트를 열면 그때 추가할 것. (2026-07-31 확인)
-*/
+/** 친구 삭제. 삭제 즉시 신규 전송이 막히고(FRIENDSHIP_REQUIRED), 기존 대화 이력은 유지된다. */
+export function deleteFriend(petId: number, friendPetId: number) {
+  return apiRequest<void>(`/pets/${petId}/friends/${friendPetId}`, {
+    method: 'DELETE',
+  })
+}

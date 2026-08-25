@@ -83,7 +83,7 @@ export function SetlogViewer({
         type="button"
         onClick={close}
         aria-label="닫기"
-        className="absolute left-3 top-3 z-10 grid size-11 place-items-center rounded-full text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] transition-colors hover:bg-white/15"
+        className="absolute left-3 top-3 z-10 grid size-11 place-items-center rounded-full text-white drop-shadow-[var(--dg-overlay-shadow)] transition-colors hover:bg-white/15"
         style={{ top: 'max(0.75rem, env(safe-area-inset-top))' }}
       >
         <X size={26} weight="bold" />
@@ -195,7 +195,7 @@ function ViewerItem({
           type="button"
           onClick={() => greet.mutate()}
           disabled={!interactive || greet.isPending}
-          className="flex flex-col items-center gap-1 text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] disabled:opacity-40"
+          className="flex flex-col items-center gap-1 text-white drop-shadow-[var(--dg-overlay-shadow)] disabled:opacity-40"
         >
           <HandWaving size={30} weight="fill" />
           <span className="text-[12px] font-medium">
@@ -203,7 +203,7 @@ function ViewerItem({
           </span>
         </button>
 
-        <div className="text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
+        <div className="text-white drop-shadow-[var(--dg-overlay-shadow)]">
           <ModerationMenu
             setlogId={setlog.setlogId}
             targetPetId={setlog.authorPet.petId}
@@ -222,7 +222,7 @@ function ViewerItem({
         <Link
           to={`/pets/${setlog.authorPet.petId}`}
           state={{ pet: setlog.authorPet }}
-          className="inline-flex items-center gap-1.5 font-semibold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]"
+          className="inline-flex items-center gap-1.5 font-semibold text-white drop-shadow-[var(--dg-overlay-shadow)]"
         >
           {setlog.authorPet.nickname}
           {setlog.authorPet.verified && (
@@ -233,7 +233,7 @@ function ViewerItem({
           </span>
         </Link>
         {setlog.caption && (
-          <p className="mt-1.5 text-[15px] text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)]">
+          <p className="mt-1.5 text-[15px] text-white drop-shadow-[var(--dg-overlay-shadow)]">
             {setlog.caption}
           </p>
         )}
@@ -270,7 +270,7 @@ function RailReaction({
       aria-label={active ? `${label} 취소` : label}
       disabled={disabled}
       onClick={onClick}
-      className="flex flex-col items-center gap-1 drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] disabled:opacity-40"
+      className="flex flex-col items-center gap-1 drop-shadow-[var(--dg-overlay-shadow)] disabled:opacity-40"
     >
       {/* 색만으로 상태를 알리지 않는다. 외곽선↔채움 형태도 함께 바뀐다. */}
       <Icon

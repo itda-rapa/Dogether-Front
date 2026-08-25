@@ -3,12 +3,14 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { Envelope, Eye, EyeSlash, Lock } from '@phosphor-icons/react'
 import { Field } from '@/components/ui/Field'
 import { inputClass } from '@/components/ui/input-class'
 import { Button } from '@/components/ui/Button'
 import { AuthLayout } from '@/components/AuthLayout'
 import { useAuth } from '@/features/auth/auth-context'
 import { toAuthMessage } from '@/features/auth/error-message'
+import { cn } from '@/lib/cn'
 
 const schema = z.object({
   email: z.email('이메일 형식이 올바르지 않습니다.'),
@@ -22,6 +24,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
 
   const from =
     (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/'
@@ -47,7 +50,7 @@ export function LoginPage() {
   if (!loading && hasSession) return <Navigate to="/" replace />
 
   return (
-    <AuthLayout title="로그인" subtitle="Dogether에 오신 걸 환영합니다">
+    <AuthLayout title="로그인" subtitle="Dogether에 오신 걸 환영합니다" hideTitle>
       {passwordResetDone && (
         <p className="mb-5 rounded-lg border border-border bg-primary-subtle px-4 py-3 text-[14px] text-primary-strong">
           비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.
@@ -57,38 +60,53 @@ export function LoginPage() {
       <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
         <Field label="이메일" error={formState.errors.email?.message}>
           {({ id, describedBy, invalid }) => (
-            <input
-              id={id}
-              type="email"
-              autoComplete="email"
-              aria-describedby={describedBy}
-              aria-invalid={invalid}
-              className={inputClass(invalid)}
-              {...register('email')}
-            />
+            <div className="relative">
+              <Envelope
+                size={20}
+                className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-primary-strong"
+              />
+              <input
+                id={id}
+                type="email"
+                autoComplete="email"
+                placeholder="이메일을 입력해주세요"
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                className={cn(inputClass(invalid), 'min-h-[52px] rounded-2xl pl-11')}
+                {...register('email')}
+              />
+            </div>
           )}
         </Field>
 
         <Field label="비밀번호" error={formState.errors.password?.message}>
           {({ id, describedBy, invalid }) => (
-            <input
-              id={id}
-              type="password"
-              autoComplete="current-password"
-              aria-describedby={describedBy}
-              aria-invalid={invalid}
-              className={inputClass(invalid)}
-              {...register('password')}
-            />
+            <div className="relative">
+              <Lock
+                size={20}
+                className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-primary-strong"
+              />
+              <input
+                id={id}
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                placeholder="비밀번호를 입력해주세요"
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                className={cn(inputClass(invalid), 'min-h-[52px] rounded-2xl pl-11 pr-11')}
+                {...register('password')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 표시'}
+                className="absolute top-1/2 right-4 -translate-y-1/2 text-muted-foreground"
+              >
+                {showPassword ? <EyeSlash size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
           )}
         </Field>
-
-        <Link
-          to="/reset-password"
-          className="self-end text-[13px] font-semibold text-primary-strong"
-        >
-          비밀번호를 잊으셨나요?
-        </Link>
 
         {submitError && (
           <p role="alert" className="text-[14px] text-destructive">
@@ -96,14 +114,21 @@ export function LoginPage() {
           </p>
         )}
 
-        <Button type="submit" disabled={formState.isSubmitting}>
+        <Button type="submit" disabled={formState.isSubmitting} className="rounded-2xl">
           {formState.isSubmitting ? '로그인 중…' : '로그인'}
         </Button>
+
+        <Link
+          to="/reset-password"
+          className="self-center text-[13px] font-semibold text-primary-strong underline"
+        >
+          비밀번호를 잊으셨나요?
+        </Link>
       </form>
 
       <p className="mt-6 text-center text-[14px] text-muted-foreground">
         계정이 없으신가요?{' '}
-        <Link to="/signup" className="font-semibold text-primary-strong">
+        <Link to="/signup" className="font-semibold text-primary-strong underline">
           회원가입
         </Link>
       </p>

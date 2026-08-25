@@ -90,7 +90,7 @@ export function PostNewPage() {
                 </div>
               ))}
               {images.length + uploadingCount < MAX_IMAGES && (
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="grid size-20 shrink-0 place-items-center rounded-lg border border-dashed border-border text-muted-foreground transition-colors hover:bg-primary-subtle">
+                <button type="button" aria-label="사진 추가" onClick={() => fileInputRef.current?.click()} className="grid size-20 shrink-0 place-items-center rounded-lg border border-dashed border-border text-muted-foreground transition-colors hover:bg-primary-subtle">
                   <Image size={22} />
                 </button>
               )}

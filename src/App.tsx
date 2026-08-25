@@ -18,7 +18,6 @@ import { OpenChatRoomPage } from '@/routes/OpenChatRoomPage'
 import { PlaceDetailPage } from '@/routes/PlaceDetailPage'
 import { PostDetailPage } from '@/routes/PostDetailPage'
 import { PostNewPage } from '@/routes/PostNewPage'
-import { UploadPage } from '@/routes/UploadPage'
 import { SetlogUploadPage } from '@/routes/SetlogUploadPage'
 import { MePage } from '@/routes/MePage'
 import { PetDetailPage } from '@/routes/PetDetailPage'
@@ -131,7 +130,6 @@ export default function App() {
                   />
                   <Route path="map/:placeId" element={<PlaceDetailPage />} />
 
-                  <Route path="upload" element={<UploadPage />} />
                   <Route path="setlogs/new" element={<SetlogUploadPage />} />
 
                   {/* 마이 페이지 — /me/pets/new 는 :petId 보다 먼저 */}

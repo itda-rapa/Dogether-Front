@@ -72,6 +72,9 @@
   --dg-shadow-md: 0 4px 6px rgb(0 0 0 / 0.1);
   --dg-shadow-map: 0 12px 36px rgb(15 23 42 / 0.18);
 
+  /* 영상 위 흰 글씨/아이콘 가독성용. elevation 이 아니라 다크에서도 동일값 사용 */
+  --dg-overlay-shadow: 0 1px 3px rgb(0 0 0 / 0.8);
+
   color-scheme: light;
 }
 
@@ -134,6 +137,53 @@
 
   button {
     cursor: pointer;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   PawLoader 전용 키프레임
+   컴포넌트는 src/components/ui/PawLoader.tsx 하나뿐이다.
+   전부 opacity/transform 만 건드려 컴포지터에서 처리되게 한다.
+   --------------------------------------------------------------------------- */
+@keyframes dg-dog-bounce {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(-2.5deg);
+  }
+}
+
+@keyframes dg-paw-pop {
+  0%,
+  100% {
+    opacity: 0.12;
+  }
+  42% {
+    opacity: 1;
+  }
+}
+
+@keyframes dg-dash-dart {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+  45% {
+    opacity: 0.85;
+    transform: translateX(0);
+  }
+}
+
+@keyframes dg-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  45% {
+    opacity: 1;
   }
 }
 
