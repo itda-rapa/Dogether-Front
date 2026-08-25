@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Dog, SealCheck, UserPlus } from '@phosphor-icons/react'
+import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
 import { BackLink } from '@/components/ui/BackLink'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { sendFriendRequest } from '@/features/friend/api'
@@ -45,7 +46,17 @@ export function PetProfilePage() {
         <p className="mt-6 text-muted-foreground">불러오는 중…</p>
       )}
 
-      {pet === null && !setlogs.isPending && (
+      {pet === null && setlogs.isError && (
+        <div className="mt-6">
+          <ApiErrorNotice
+            error={setlogs.error}
+            title="프로필을 불러오지 못했습니다"
+            onRetry={() => void setlogs.refetch()}
+          />
+        </div>
+      )}
+
+      {pet === null && !setlogs.isPending && !setlogs.isError && (
         <div className="mt-6">
           <EmptyState
             title="프로필을 불러올 수 없습니다"

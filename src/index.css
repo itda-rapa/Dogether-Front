@@ -65,6 +65,9 @@
   --dg-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
   --dg-shadow-md: 0 4px 6px rgb(0 0 0 / 0.1);
 
+  /* 영상 위 흰 글씨/아이콘 가독성용. elevation 이 아니라 다크에서도 동일값 사용 */
+  --dg-overlay-shadow: 0 1px 3px rgb(0 0 0 / 0.8);
+
   color-scheme: light;
 }
 
