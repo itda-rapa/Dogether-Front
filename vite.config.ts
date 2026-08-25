@@ -18,6 +18,14 @@ export default defineConfig({
     // 개발 중에는 /api 를 백엔드로 프록시해 CORS 설정 없이 붙는다.
     // 백엔드: C:\work\dogether (Spring Boot, 기본 8080)
     proxy: {
+      // VWorld 검색 API는 브라우저 직접 호출에 CORS 응답 헤더를 제공하지 않는다.
+      // 개발 서버가 same-origin 경로를 대신 전달하며, 배포 환경은 nginx.conf가 맡는다.
+      '/vworld-api': {
+        target: 'https://api.vworld.kr',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (p) => p.replace(/^\/vworld-api/, ''),
+      },
       '/api': {
         target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
         changeOrigin: true,

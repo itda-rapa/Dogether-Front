@@ -18,6 +18,7 @@
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-virtual": "^3.14.8",
     "clsx": "^2.1.1",
+    "ol": "^10.10.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-hook-form": "^7.83.0",

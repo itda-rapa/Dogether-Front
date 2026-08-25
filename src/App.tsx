@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from '@/app/theme'
@@ -14,7 +15,6 @@ import { OpenChatPage } from '@/routes/OpenChatPage'
 import { OpenChatCreatePage } from '@/routes/OpenChatCreatePage'
 import { OpenChatDetailPage } from '@/routes/OpenChatDetailPage'
 import { OpenChatRoomPage } from '@/routes/OpenChatRoomPage'
-import { MapPage } from '@/routes/MapPage'
 import { PlaceDetailPage } from '@/routes/PlaceDetailPage'
 import { PostDetailPage } from '@/routes/PostDetailPage'
 import { PostNewPage } from '@/routes/PostNewPage'
@@ -51,6 +51,10 @@ import { LoginPage } from '@/routes/LoginPage'
 import { SignupPage } from '@/routes/SignupPage'
 import { ResetPasswordPage } from '@/routes/ResetPasswordPage'
 import { NotFoundPage } from '@/routes/NotFoundPage'
+
+const MapPage = lazy(() =>
+  import('@/routes/MapPage').then((module) => ({ default: module.MapPage })),
+)
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -116,7 +120,14 @@ export default function App() {
                   <Route path="meetings" element={<MeetingsPage />} />
 
                   {/* 지도 */}
-                  <Route path="map" element={<MapPage />} />
+                  <Route
+                    path="map"
+                    element={
+                      <Suspense fallback={<div className="flex flex-1 items-center justify-center text-muted-foreground">지도를 준비하고 있어요…</div>}>
+                        <MapPage />
+                      </Suspense>
+                    }
+                  />
                   <Route path="map/:placeId" element={<PlaceDetailPage />} />
 
                   <Route path="setlogs/new" element={<SetlogUploadPage />} />

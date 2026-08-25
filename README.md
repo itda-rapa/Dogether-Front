@@ -32,6 +32,7 @@ npm run dev
 ```
 
 기본적으로 `http://localhost:5173`에서 열리며, `/api`로 오는 요청은 `vite.config.ts` 프록시가 백엔드로 전달합니다.
+VWorld 검색 요청은 브라우저 CORS 제한을 피하기 위해 개발 환경에서는 Vite가, 배포 환경에서는 Nginx가 `/vworld-api` 경로로 프록시합니다.
 
 ### 환경 변수
 
@@ -39,6 +40,7 @@ npm run dev
 |---|---|---|
 | `VITE_API_BASE_URL` | `/api` | API 클라이언트(`src/lib/api.ts`)가 사용하는 베이스 URL |
 | `VITE_API_PROXY_TARGET` | `http://localhost:8080` | 개발 서버 프록시가 바라볼 백엔드 주소 |
+| `VITE_VWORLD_API_KEY` | 없음 | VWorld WMTS/TMS 인증키. 발급 시 등록한 서비스 도메인과 실행 도메인이 같아야 함 |
 | `VITE_WS_URL` | `/open-chat-ws` | 오픈채팅 SockJS 엔드포인트 |
 | `VITE_CONSUMER_PROXY_TARGET` | `http://localhost:8081` | 개발 서버의 오픈채팅 SockJS 프록시가 바라볼 consumer 주소 |
 

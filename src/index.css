@@ -28,6 +28,9 @@
   --color-like: var(--dg-like);
   --color-destructive: var(--dg-destructive);
   --color-ring: var(--dg-ring);
+  --color-map-hospital: var(--dg-map-hospital);
+  --color-map-pharmacy: var(--dg-map-pharmacy);
+  --color-map-canvas: var(--dg-map-canvas);
 }
 
 :root {
@@ -60,10 +63,14 @@
   --dg-like: #ff7f50; /* 좋아요 전용 기능색. 텍스트 색으로 쓰면 2.42:1 — 금지 */
   --dg-destructive: #dc2626; /*  4.53:1 */
   --dg-ring: #0f766e;
+  --dg-map-hospital: #2563eb;
+  --dg-map-pharmacy: #059669;
+  --dg-map-canvas: #dce8e5;
 
   /* 다크에서는 그림자 대신 보더로 elevation 을 표현하므로 라이트에만 값을 둔다 */
   --dg-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
   --dg-shadow-md: 0 4px 6px rgb(0 0 0 / 0.1);
+  --dg-shadow-map: 0 12px 36px rgb(15 23 42 / 0.18);
 
   /* 영상 위 흰 글씨/아이콘 가독성용. elevation 이 아니라 다크에서도 동일값 사용 */
   --dg-overlay-shadow: 0 1px 3px rgb(0 0 0 / 0.8);
@@ -89,9 +96,13 @@
   --dg-like: #ff7f50; /*  7.14:1 — 라이트와 동일값 사용 가능 */
   --dg-destructive: #ef4444; /*  4.75:1 */
   --dg-ring: #2dd4bf;
+  --dg-map-hospital: #60a5fa;
+  --dg-map-pharmacy: #34d399;
+  --dg-map-canvas: #1b2934;
 
   --dg-shadow-sm: none;
   --dg-shadow-md: none;
+  --dg-shadow-map: 0 12px 36px rgb(0 0 0 / 0.4);
 
   color-scheme: dark;
 }
