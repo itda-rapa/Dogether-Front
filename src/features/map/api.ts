@@ -1,5 +1,5 @@
 import { apiRequest } from '@/lib/api'
-import type { BackendMapPlaceType, MapBounds, MapPlace } from './types'
+import type { BackendMapPlaceType, CulturalFacility, CulturalFacilityCategory, MapBounds, MapCenter, MapPlace } from './types'
 
 export function listMapPlaces(type: BackendMapPlaceType, bounds: MapBounds, signal?: AbortSignal) {
   const params = new URLSearchParams({
@@ -11,6 +11,31 @@ export function listMapPlaces(type: BackendMapPlaceType, bounds: MapBounds, sign
   })
 
   return apiRequest<MapPlace[]>(`/map/places?${params}`, { signal })
+}
+
+export function listNearbyMapPlaces(
+  type: BackendMapPlaceType,
+  center: MapCenter,
+  signal?: AbortSignal,
+) {
+  return apiRequest<MapPlace[]>('/map/places/nearby', {
+    method: 'POST',
+    body: {
+      type,
+      longitude: center.longitude,
+      latitude: center.latitude,
+      radiusMeters: 3000,
+    },
+    signal,
+  })
+}
+
+export function listNearbyCulturalFacilities(category: CulturalFacilityCategory, center: MapCenter, signal?: AbortSignal) {
+  return apiRequest<CulturalFacility[]>('/map/cultural-facilities/nearby', {
+    method: 'POST',
+    body: { category, longitude: center.longitude, latitude: center.latitude },
+    signal,
+  })
 }
 
 type VWorldSearchItem = {
@@ -100,6 +125,7 @@ export async function searchVWorld(query: string, signal?: AbortSignal): Promise
         status: searchType.type === 'place' ? item.category || '장소' : '주소',
         longitude,
         latitude,
+        distanceMeters: null,
       }]
     }),
   ).slice(0, 20)

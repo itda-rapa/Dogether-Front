@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, CalendarPlus, Dog, PaperPlaneRight, SignOut, Sparkle, Trash, UserPlus, UsersThree, X } from '@phosphor-icons/react'
+import { ArrowLeft, CalendarPlus, Dog, MapPin, PaperPlaneRight, SignOut, Sparkle, Trash, UserPlus, UsersThree, X } from '@phosphor-icons/react'
 import { useAuth } from '@/features/auth/auth-context'
 import {
   deleteOpenChatRoom,
+  decidePlaceIntent,
   getOpenChatRoom,
   inviteFriendToOpenChat,
   leaveOpenChatRoom,
@@ -14,15 +15,20 @@ import {
 } from '@/features/chat/api'
 import { listFriends } from '@/features/friend/api'
 import { formatTime, mergeMessages, type ChatMessage } from '@/features/chat/types'
-import { subscribeToChatRoom } from '@/features/chat/realtime'
+import { subscribeToChatRoom, type OpenChatDraftNotification } from '@/features/chat/realtime'
 import type { OpenChatCardDraft } from '@/features/chat/api'
 import { ApiError } from '@/lib/api'
 import { cn } from '@/lib/cn'
 import { FALLBACK_MESSAGE, splitDraftDateTime } from '@/features/meeting/types'
+import {
+  detectPlaceKeyword,
+  keywordFromPlaceType,
+  placeTypeFromKeyword,
+} from '@/features/chat/placeSuggestion'
+import { InlineFacilityMap } from '@/features/chat/InlineFacilityMap'
+import { SharedFacilityMapMessage } from '@/features/chat/SharedFacilityMapMessage'
 
 const FALLBACK_POLL_MS = 10_000
-const AUTO_DRAFT_DELAY_MS = 800
-const DAY_MS = 24 * 60 * 60 * 1_000
 
 export function OpenChatRoomPage() {
   const navigate = useNavigate()
@@ -40,9 +46,12 @@ export function OpenChatRoomPage() {
   const [aiDrafts, setAiDrafts] = useState<OpenChatCardDraft[]>([])
   const [aiNotice, setAiNotice] = useState<string | null>(null)
   const [aiGenerating, setAiGenerating] = useState(false)
+  const [dismissedPlaceMessageId, setDismissedPlaceMessageId] = useState<number | null>(null)
+  const [approvedPlaceMessageId, setApprovedPlaceMessageId] = useState<number | null>(null)
+  const [placeConsentMessage, setPlaceConsentMessage] = useState<ChatMessage | null>(null)
   const afterRef = useRef<number | null>(null)
   const bottomRef = useRef<HTMLLIElement | null>(null)
-  const lastAutoDraftMessageIdRef = useRef<number | null>(null)
+  const latestDraftRequestIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     setMessages([])
@@ -50,7 +59,10 @@ export function OpenChatRoomPage() {
     setAiDrafts([])
     setAiNotice(null)
     setAiGenerating(false)
-    lastAutoDraftMessageIdRef.current = null
+    setDismissedPlaceMessageId(null)
+    setApprovedPlaceMessageId(null)
+    setPlaceConsentMessage(null)
+    latestDraftRequestIdRef.current = null
   }, [roomIdNumber])
 
   const room = useQuery({
@@ -76,6 +88,28 @@ export function OpenChatRoomPage() {
     }
   }, [poll.data])
 
+  const applyDraftNotification = useCallback((notification: OpenChatDraftNotification) => {
+    if (notification.roomId !== roomIdNumber) return
+    if (
+      latestDraftRequestIdRef.current == null ||
+      notification.requestId !== latestDraftRequestIdRef.current
+    ) return
+    latestDraftRequestIdRef.current = null
+    setAiGenerating(false)
+    if (notification.status === 'FAILED') {
+      setAiDrafts([])
+      setAiNotice(notification.message ?? 'AI 약속 카드를 만들지 못했습니다.')
+      return
+    }
+    const drafts: OpenChatCardDraft[] = notification.drafts.map((draft) => ({
+      ...draft,
+      participants: [],
+    }))
+    setAiDrafts(drafts)
+    setAiNotice(drafts.length === 0 ? '표시할 약속 카드가 없습니다.' : null)
+    queryClient.setQueryData(['card-draft', String(roomIdNumber)], drafts)
+  }, [queryClient, roomIdNumber])
+
   useEffect(() => {
     if (!valid || !room.isSuccess) return
     return subscribeToChatRoom(
@@ -96,8 +130,9 @@ export function OpenChatRoomPage() {
         afterRef.current = Math.max(afterRef.current ?? 0, message.messageId)
       },
       setConnected,
+      (notification) => applyDraftNotification(notification),
     )
-  }, [roomIdNumber, room.isSuccess, valid])
+  }, [applyDraftNotification, roomIdNumber, room.isSuccess, valid])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
@@ -117,6 +152,23 @@ export function OpenChatRoomPage() {
     onSuccess: (message) => {
       setMessages((previous) => mergeMessages(previous, [message]))
       afterRef.current = Math.max(afterRef.current ?? 0, message.messageId)
+      const needsPlaceConsent =
+        message.type === 'TEXT' &&
+        message.senderPetId === me?.activePetId &&
+        detectPlaceKeyword(message.body ?? '') != null
+      if (needsPlaceConsent && me?.activePetId != null) {
+        latestDraftRequestIdRef.current = null
+        setAiGenerating(false)
+        setAiNotice(null)
+        setAiDrafts([])
+        setPlaceConsentMessage(message)
+        sessionStorage.setItem(
+          placeConsentStorageKey(roomIdNumber, me.activePetId),
+          String(message.messageId),
+        )
+        setDismissedPlaceMessageId(null)
+        setApprovedPlaceMessageId(null)
+      }
       setDraft('')
       setSendError(null)
     },
@@ -130,61 +182,15 @@ export function OpenChatRoomPage() {
       setAiNotice(null)
       setAiDrafts([])
     },
-    onSuccess: (drafts) => {
-      setAiGenerating(false)
-      // 요청이 진행되는 동안 방에 카드가 먼저 만들어졌으면 이 응답은 이미 낡은 것이다.
-      // 그대로 반영하면 방금 지운 패널이 옛 초안으로 다시 채워진다.
-      if (messages.at(-1)?.type === 'CARD') return
-      setAiDrafts(drafts)
-      setAiNotice(drafts.length === 0 ? '표시할 약속 카드가 없습니다.' : null)
-      queryClient.setQueryData(['card-draft', String(roomIdNumber)], drafts)
+    onSuccess: (result) => {
+      latestDraftRequestIdRef.current = result.requestId
+      setAiNotice('대화를 살펴보고 약속 참여자를 정리하고 있어요.')
     },
     onError: (error) => {
       setAiGenerating(false)
       setAiNotice(error instanceof ApiError ? error.message : 'AI 약속 카드를 요청하지 못했습니다.')
     },
   })
-  const requestAiDraftMutate = requestAiDraft.mutate
-
-  useEffect(() => {
-    if (
-      !valid ||
-      !room.isSuccess ||
-      me?.activePetId == null
-    ) return
-
-    // 카드가 이미 만들어진 대화는 다시 초안 후보로 삼지 않는다.
-    // 그렇지 않으면 카드 확정 -> 페이지 재마운트 -> 확정 직전 TEXT가 다시
-    // "최신 발화"로 잡혀 같은 초안이 무한 재생성된다.
-    const lastCardIndex = messages.findLastIndex((message) => message.type === 'CARD')
-    const recentPetMessages = messages
-      .slice(lastCardIndex + 1)
-      .filter(
-        (message) =>
-          message.type === 'TEXT' &&
-          message.senderType === 'PET' &&
-          message.senderPetId != null &&
-          new Date(message.createdAt).getTime() >= Date.now() - DAY_MS,
-      )
-    const latest = recentPetMessages.at(-1)
-    if (!latest || latest.senderPetId !== me.activePetId) return
-
-    const speakers = new Set(recentPetMessages.map((message) => message.senderPetId))
-    const enoughRoomParticipants = room.data.activeParticipants == null
-      ? speakers.size >= 3
-      : room.data.activeParticipants >= 3
-    if (!enoughRoomParticipants) return
-    // 방에는 3명 이상 있어야 하지만, 약속 자체는 제안자와 동의자 2명이면 성립한다.
-    if (speakers.size < 2) return
-    if (lastAutoDraftMessageIdRef.current === latest.messageId) return
-
-    const timeout = window.setTimeout(() => {
-      lastAutoDraftMessageIdRef.current = latest.messageId
-      requestAiDraftMutate()
-    }, AUTO_DRAFT_DELAY_MS)
-    return () => window.clearTimeout(timeout)
-  }, [me?.activePetId, messages, requestAiDraftMutate, room.data, room.isSuccess, valid])
-
   const friends = useQuery({
     queryKey: ['friends', me?.activePetId, 'open-chat-invite'],
     queryFn: () => listFriends(me!.activePetId!, null, 100),
@@ -224,6 +230,87 @@ export function OpenChatRoomPage() {
       navigate('/chat/open', { replace: true })
     },
   })
+
+  const detectedPlaceKeyword =
+    placeConsentMessage?.type === 'TEXT' &&
+    placeConsentMessage.senderType === 'PET' &&
+    placeConsentMessage.senderPetId === me?.activePetId &&
+    placeConsentMessage.body
+      ? detectPlaceKeyword(placeConsentMessage.body)
+      : null
+
+  useEffect(() => {
+    if (me?.activePetId == null || placeConsentMessage != null) return
+    const storedMessageId = Number(
+      sessionStorage.getItem(
+        placeConsentStorageKey(roomIdNumber, me.activePetId),
+      ),
+    )
+    if (!Number.isInteger(storedMessageId) || storedMessageId <= 0) return
+    const storedMessage = messages.find(
+      (message) =>
+        message.messageId === storedMessageId &&
+        message.type === 'TEXT' &&
+        message.senderPetId === me.activePetId &&
+        detectPlaceKeyword(message.body ?? '') != null,
+    )
+    if (storedMessage) setPlaceConsentMessage(storedMessage)
+  }, [me?.activePetId, messages, placeConsentMessage, roomIdNumber])
+  const detectedFacilityCategory = detectedPlaceKeyword
+    ? placeTypeFromKeyword(detectedPlaceKeyword)
+    : null
+  const shouldRequestPlaceIntent =
+    detectedPlaceKeyword != null &&
+    placeConsentMessage != null &&
+    placeConsentMessage.messageId !== dismissedPlaceMessageId &&
+    me != null &&
+    detectedFacilityCategory != null
+  const placeIntent = useQuery({
+    queryKey: ['chat', 'place-intent', roomIdNumber, placeConsentMessage?.messageId],
+    queryFn: () => decidePlaceIntent(roomIdNumber, placeConsentMessage!.messageId),
+    enabled: valid && room.isSuccess && shouldRequestPlaceIntent,
+    retry: false,
+    staleTime: Infinity,
+  })
+  const confirmedPlaceKeyword = placeIntent.data?.decision === 'SHOW'
+    ? keywordFromPlaceType(placeIntent.data.placeType)
+    : null
+  const confirmedFacilityCategory = placeIntent.data?.decision === 'SHOW'
+    ? placeIntent.data.placeType
+    : null
+  const showFacilityConsent =
+    confirmedPlaceKeyword != null &&
+    confirmedFacilityCategory != null &&
+    shouldRequestPlaceIntent &&
+    placeConsentMessage?.senderPetId === me?.activePetId &&
+    approvedPlaceMessageId !== placeConsentMessage?.messageId
+  const showFacilityMap =
+    confirmedPlaceKeyword != null &&
+    confirmedFacilityCategory != null &&
+    shouldRequestPlaceIntent &&
+    placeConsentMessage?.senderPetId === me?.activePetId &&
+    approvedPlaceMessageId === placeConsentMessage?.messageId
+  const placeFlowActive = showFacilityConsent || showFacilityMap
+  const dismissFacilityMap = () => {
+    if (placeConsentMessage) setDismissedPlaceMessageId(placeConsentMessage.messageId)
+    if (me?.activePetId != null) {
+      sessionStorage.removeItem(
+        placeConsentStorageKey(roomIdNumber, me.activePetId),
+      )
+    }
+    setPlaceConsentMessage(null)
+  }
+  const applySharedMapMessage = useCallback((message: ChatMessage) => {
+    setMessages((previous) => mergeMessages(previous, [message]))
+    afterRef.current = Math.max(afterRef.current ?? 0, message.messageId)
+    if (me?.activePetId != null) {
+      sessionStorage.removeItem(
+        placeConsentStorageKey(roomIdNumber, me.activePetId),
+      )
+    }
+    setPlaceConsentMessage(null)
+    setApprovedPlaceMessageId(null)
+  }, [me?.activePetId, roomIdNumber])
 
   if (!valid) return <Centered>잘못된 채팅방입니다.</Centered>
   if (room.isPending) return <Centered>채팅방을 불러오는 중…</Centered>
@@ -356,13 +443,53 @@ export function OpenChatRoomPage() {
         {messages.map((message) => (
           <li key={message.messageId}>
             <OpenMessageRow message={message} activePetId={me?.activePetId ?? null} />
+            {showFacilityConsent && message.messageId === placeConsentMessage?.messageId && confirmedPlaceKeyword && (
+              <section
+                className="mt-2 rounded-2xl border border-primary/30 bg-surface p-3 shadow-sm"
+                aria-label="지도 공유 확인"
+              >
+                <p className="flex items-center gap-2 font-semibold">
+                  <MapPin size={19} weight="fill" className="text-primary-strong" />
+                  주변 {confirmedPlaceKeyword} 지도를 채팅방에 공유할까요?
+                </p>
+                <p className="mt-1 text-[13px] text-muted-foreground">
+                  승인하면 현재 위치를 확인한 뒤 가까운 시설 5곳을 메시지로 공유합니다.
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={dismissFacilityMap}
+                    className="min-h-11 rounded-lg border border-border font-semibold hover:bg-muted"
+                  >
+                    공유 안 함
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setApprovedPlaceMessageId(message.messageId)}
+                    className="min-h-11 rounded-lg bg-primary font-semibold text-on-primary hover:bg-primary-hover"
+                  >
+                    지도 공유
+                  </button>
+                </div>
+              </section>
+            )}
+            {showFacilityMap && message.messageId === placeConsentMessage?.messageId && confirmedPlaceKeyword && confirmedFacilityCategory && (
+              <InlineFacilityMap
+                roomId={roomIdNumber}
+                triggerMessageId={message.messageId}
+                keyword={confirmedPlaceKeyword}
+                category={confirmedFacilityCategory}
+                onDismiss={dismissFacilityMap}
+                onShared={applySharedMapMessage}
+              />
+            )}
           </li>
         ))}
         <li ref={bottomRef} />
       </ul>
 
       <div className="border-t border-border bg-surface p-3">
-        {(aiGenerating || aiNotice || aiDrafts.length > 0) && (
+        {!placeFlowActive && (aiGenerating || aiNotice || aiDrafts.length > 0) && (
           <section className="mb-3 rounded-xl border border-primary/30 bg-primary-subtle p-3" aria-label="AI 약속 카드">
             <div className="mb-2 flex items-center gap-2 text-[14px] font-semibold text-primary-strong">
               <Sparkle size={16} weight="fill" /> AI 약속 카드
@@ -493,6 +620,28 @@ function OpenMessageRow({
       </div>
     )
   }
+  if (message.type === 'MAP' && message.map) {
+    return (
+      <div className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
+        <div className="flex w-full max-w-[92%] flex-col gap-1">
+          {!mine && (
+            <span className="px-1 text-[13px] text-muted-foreground">
+              {message.senderPetNickname ?? `반려견 #${message.senderPetId}`}
+            </span>
+          )}
+          <SharedFacilityMapMessage
+            map={message.map}
+            roomId={message.roomId}
+            messageId={message.messageId}
+            senderNickname={message.senderPetNickname}
+          />
+          <span className={cn('text-[13px] tabular-nums text-muted-foreground', mine && 'self-end')}>
+            {formatTime(message.createdAt)}
+          </span>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
       <div className="flex max-w-[78%] flex-col gap-1">
@@ -538,6 +687,10 @@ function messageForSendError(error: unknown) {
     return '채팅방에 다시 입장한 뒤 메시지를 보내 주세요.'
   }
   return '메시지를 보내지 못했습니다. 잠시 후 다시 시도해 주세요.'
+}
+
+function placeConsentStorageKey(roomId: number, activePetId: number) {
+  return `chat:map-consent:${roomId}:pet:${activePetId}`
 }
 
 function formatDraftDateTime(draft: OpenChatCardDraft): string {

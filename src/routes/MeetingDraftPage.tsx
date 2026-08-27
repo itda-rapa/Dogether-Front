@@ -13,7 +13,6 @@ import { cn } from '@/lib/cn'
 import { createCardDraft, createMeetingCard } from '@/features/meeting/api'
 import {
   getOpenChatCardDraft,
-  requestOpenChatCardDraft,
   type OpenChatCardDraft,
 } from '@/features/chat/api'
 import {
@@ -73,7 +72,9 @@ export function MeetingDraftPage() {
       if (selectedDraftId != null && Number.isFinite(selectedDraftId)) {
         return [await getOpenChatCardDraft(roomIdNum, selectedDraftId)]
       }
-      return requestOpenChatCardDraft(roomIdNum)
+      // 오픈채팅 AI 초안은 Kafka 비동기 결과로만 진입한다. draftId 없이 이 화면에서
+      // POST를 다시 보내면 결과를 기다릴 WebSocket 화면이 없어지므로 빈 목록으로 둔다.
+      return []
     },
     enabled: Number.isFinite(roomIdNum),
     // 초안 생성은 POST 다. 화면에 들어올 때 한 번만 만들고 자동 재요청하지 않는다.

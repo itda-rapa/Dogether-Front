@@ -1,6 +1,7 @@
 import { Link } from 'react-router'
 import { FirstAidKit, X } from '@phosphor-icons/react'
 import type { PlaceKeyword } from './placeSuggestion'
+import { placeTypeFromKeyword } from './placeSuggestion'
 
 /**
  * 방금 내가 보낸 메시지에서 병원/약국 키워드가 잡혔을 때만 뜬다.
@@ -26,7 +27,7 @@ export function PlaceSuggestionPopup({
         {keyword}을(를) 찾으시나요?
       </p>
       <Link
-        to={`/map?filter=${encodeURIComponent(keyword)}&intent=locate`}
+        to={`/map?type=${placeTypeFromKeyword(keyword)}&intent=locate`}
         onClick={onDismiss}
         className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-primary px-4 text-[14px] font-semibold text-on-primary transition-colors hover:bg-primary-hover"
       >

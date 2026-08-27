@@ -2,6 +2,7 @@ import { Client, type IMessage } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { getRealtimeAccessToken } from '@/lib/api'
 import type { ChatMessage } from './types'
+import type { OpenChatCardDraft } from './api'
 
 type ChatMessageEvent = {
   requestId: string
@@ -10,20 +11,15 @@ type ChatMessageEvent = {
   senderPetId: number | null
   senderPetNickname: string | null
   senderType: 'PET' | 'SYSTEM'
-  type: 'TEXT' | 'CARD' | 'SYSTEM'
+  type: 'TEXT' | 'CARD' | 'MAP' | 'SYSTEM'
   body: string | null
+  map: import('./types').ChatMapMessage | null
   meetingCardId: number | null
   clientMessageId: string | null
   sentAt: string
 }
 
-export type OpenChatDraft = {
-  meetingType: string | null
-  date: string | null
-  time: string | null
-  place: string | null
-  participantPetIds: number[]
-}
+export type OpenChatDraft = Omit<OpenChatCardDraft, 'participants'>
 
 export type OpenChatDraftNotification = {
   requestId: string
@@ -62,6 +58,7 @@ export function subscribeToChatRoom(
           senderPetNickname: event.senderPetNickname,
           type: event.type,
           body: event.body,
+          map: event.map ?? null,
           meetingCardId: event.meetingCardId ?? null,
           clientMessageId: event.clientMessageId,
           createdAt: event.sentAt,

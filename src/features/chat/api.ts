@@ -105,14 +105,58 @@ export type OpenChatDraftParticipant = {
   profileUrl: string | null
 }
 
+export type PlaceIntentResult = {
+  decision: 'SHOW' | 'SUPPRESS'
+  placeType: import('@/features/map/types').CulturalFacilityCategory | null
+  targetPetId: number
+}
+
+export function decidePlaceIntent(roomId: number, triggerMessageId: number) {
+  return apiRequest<PlaceIntentResult>(`/chat/rooms/${roomId}/place-intent`, {
+    method: 'POST',
+    body: { triggerMessageId },
+  })
+}
+
+export function createChatMapMessage(
+  roomId: number,
+  input: {
+    triggerMessageId: number
+    category: import('@/features/map/types').CulturalFacilityCategory
+    longitude: number
+    latitude: number
+  },
+) {
+  return apiRequest<ChatMessage>(`/chat/rooms/${roomId}/map-messages`, {
+    method: 'POST',
+    body: input,
+  })
+}
+
+export function shareChatMapLocation(
+  roomId: number,
+  mapMessageId: number,
+  input: { longitude: number; latitude: number },
+) {
+  return apiRequest<ChatMessage>(
+    `/chat/rooms/${roomId}/map-messages/${mapMessageId}/locations`,
+    { method: 'POST', body: input },
+  )
+}
+
 export type OpenChatCardDraft = CardDraft & {
   requestedByPetId: number
   participantPetIds: number[]
   participants: OpenChatDraftParticipant[]
 }
 
+export type OpenChatDraftRequestResult = {
+  requestId: string
+  roomId: number
+}
+
 export function requestOpenChatCardDraft(roomId: number) {
-  return apiRequest<OpenChatCardDraft[]>(
+  return apiRequest<OpenChatDraftRequestResult>(
     `/chat/rooms/open/${roomId}/card-drafts`,
     { method: 'POST' },
   )
@@ -121,6 +165,17 @@ export function requestOpenChatCardDraft(roomId: number) {
 export function getOpenChatCardDraft(roomId: number, draftId: number) {
   return apiRequest<OpenChatCardDraft>(
     `/chat/rooms/open/${roomId}/card-drafts/${draftId}`,
+  )
+}
+
+/** 지도 시설에서 AI 호출 없이, 장소가 미리 채워진 오픈채팅 약속 초안을 만든다. */
+export function createOpenChatPlaceDraft(
+  roomId: number,
+  input: { placeText: string; cardType: import('@/features/meeting/types').CardType },
+) {
+  return apiRequest<OpenChatCardDraft>(
+    `/chat/rooms/open/${roomId}/place-drafts`,
+    { method: 'POST', body: input },
   )
 }
 

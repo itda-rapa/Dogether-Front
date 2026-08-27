@@ -10,6 +10,7 @@ import {
 } from '@phosphor-icons/react'
 import {
   getChatRoom,
+  decidePlaceIntent,
   listChatMessages,
   sendChatMessage,
 } from '@/features/chat/api'
@@ -22,9 +23,11 @@ import {
   type ChatMessage,
 } from '@/features/chat/types'
 import {
-  detectPlaceKeyword,
+  detectMedicalPlaceKeyword,
   isPlaceSuggestionSuppressed,
+  keywordFromPlaceType,
   suppressPlaceSuggestion,
+  placeTypeFromKeyword,
 } from '@/features/chat/placeSuggestion'
 import { PlaceSuggestionPopup } from '@/features/chat/PlaceSuggestionPopup'
 import { ModerationMenu } from '@/components/ModerationMenu'
@@ -159,18 +162,32 @@ export function ChatRoomPage() {
     lastMessage.senderType === 'PET' &&
     lastMessage.senderPetId !== counterpartPetId &&
     lastMessage.body
-      ? detectPlaceKeyword(lastMessage.body)
+      ? detectMedicalPlaceKeyword(lastMessage.body)
       : null
+  const placeCategory = placeKeyword ? placeTypeFromKeyword(placeKeyword) : null
 
-  const showPlacePopup =
+  const shouldRequestPlaceIntent =
     placeKeyword != null &&
     lastMessage.messageId !== dismissedPlaceMessageId &&
     me != null &&
-    !isPlaceSuggestionSuppressed(roomIdNum, me.userId)
+    placeCategory != null &&
+    !isPlaceSuggestionSuppressed(roomIdNum, me.userId, placeCategory)
+
+  const placeIntent = useQuery({
+    queryKey: ['chat', 'place-intent', roomIdNum, lastMessage?.messageId],
+    queryFn: () => decidePlaceIntent(roomIdNum, lastMessage!.messageId),
+    enabled: shouldRequestPlaceIntent,
+    retry: false,
+    staleTime: Infinity,
+  })
+  const confirmedPlaceKeyword = placeIntent.data?.decision === 'SHOW'
+    ? keywordFromPlaceType(placeIntent.data.placeType)
+    : null
+  const showPlacePopup = confirmedPlaceKeyword != null && shouldRequestPlaceIntent
 
   const dismissPlacePopup = () => {
     if (lastMessage) setDismissedPlaceMessageId(lastMessage.messageId)
-    if (me) suppressPlaceSuggestion(roomIdNum, me.userId)
+    if (me && placeCategory) suppressPlaceSuggestion(roomIdNum, me.userId, placeCategory)
   }
 
   if (!valid) return <Centered>잘못된 채팅방입니다.</Centered>
@@ -259,9 +276,9 @@ export function ChatRoomPage() {
       </ul>
 
       <div className="sticky bottom-0 border-t border-border bg-surface">
-        {showPlacePopup && placeKeyword && (
+        {showPlacePopup && confirmedPlaceKeyword && (
           <PlaceSuggestionPopup
-            keyword={placeKeyword}
+            keyword={confirmedPlaceKeyword}
             onDismiss={dismissPlacePopup}
           />
         )}

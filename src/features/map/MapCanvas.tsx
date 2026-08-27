@@ -12,7 +12,7 @@ import Cluster from 'ol/source/Cluster'
 import VectorSource from 'ol/source/Vector'
 import XYZ from 'ol/source/XYZ'
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from 'ol/style'
-import type { MapBounds, MapPlace, MapPlaceType } from './types'
+import type { MapBounds, MapCenter, MapPlace, MapPlaceType } from './types'
 import 'ol/ol.css'
 
 const SEOUL_CENTER = fromLonLat([126.978, 37.5665])
@@ -23,8 +23,9 @@ type Props = {
   onSelectPlace: (place: MapPlace | null) => void
   onBoundsChange: (bounds: MapBounds) => void
   locateRequest: number
-  onLocationResult: (result: 'found' | 'denied') => void
+  onLocationResult: (result: 'found' | 'denied' | 'unavailable', center?: MapCenter) => void
   onMapReady: (actions: { zoomIn: () => void; zoomOut: () => void }) => void
+  fitPlaces?: boolean
 }
 
 function mapColor(type: MapPlaceType) {
@@ -45,6 +46,7 @@ export function MapCanvas({
   locateRequest,
   onLocationResult,
   onMapReady,
+  fitPlaces = false,
 }: Props) {
   const targetRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<Map | null>(null)
@@ -85,7 +87,7 @@ export function MapCanvas({
               stroke: new Stroke({ color: '#ffffff', width: isSelected ? 4 : 3 }),
             }),
             text: new Text({
-              text: count > 1 ? String(count) : placeType === 'HOSPITAL' ? '+' : placeType === 'PHARMACY' ? 'P' : 'V',
+              text: count > 1 ? String(count) : placeType === 'HOSPITAL' ? '+' : placeType === 'PHARMACY' ? 'P' : '●',
               font: `700 ${count > 99 ? 11 : 13}px Pretendard`,
               fill: new Fill({ color: '#ffffff' }),
             }),
@@ -191,7 +193,18 @@ export function MapCanvas({
         return feature
       }),
     )
-  }, [places])
+    const map = mapRef.current
+    if (fitPlaces && map && places.length > 0) {
+      const extent = boundingExtent(
+        places.map((place) => fromLonLat([place.longitude, place.latitude])),
+      )
+      map.getView().fit(extent, {
+        duration: 250,
+        maxZoom: 16,
+        padding: [45, 45, 45, 45],
+      })
+    }
+  }, [fitPlaces, places])
 
   useEffect(() => {
     selectedPlaceRef.current = selectedPlace
@@ -212,18 +225,36 @@ export function MapCanvas({
       callbacksRef.current.onLocationResult('denied')
       return
     }
+    const found = ({ coords }: GeolocationPosition) => {
+      const coordinate = fromLonLat([coords.longitude, coords.latitude])
+      userSourceRef.current.clear()
+      userSourceRef.current.addFeature(new Feature(new Point(coordinate)))
+      map.getView().animate({ center: coordinate, zoom: 16, duration: 350 })
+      callbacksRef.current.onLocationResult('found', {
+        longitude: coords.longitude,
+        latitude: coords.latitude,
+      })
+    }
     navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        const coordinate = fromLonLat([coords.longitude, coords.latitude])
-        userSourceRef.current.clear()
-        userSourceRef.current.addFeature(new Feature(new Point(coordinate)))
-        map.getView().animate({ center: coordinate, zoom: 16, duration: 350 })
-        callbacksRef.current.onLocationResult('found')
+      found,
+      (highAccuracyError) => {
+        if (highAccuracyError.code === highAccuracyError.PERMISSION_DENIED) {
+          callbacksRef.current.onLocationResult('denied')
+          return
+        }
+        // GPS가 없는 데스크톱에서는 고정밀 조회가 시간 초과될 수 있다.
+        // 이때 Wi-Fi/네트워크 기반의 일반 위치 조회를 한 번 더 시도한다.
+        navigator.geolocation.getCurrentPosition(
+          found,
+          (fallbackError) => callbacksRef.current.onLocationResult(
+            fallbackError.code === fallbackError.PERMISSION_DENIED ? 'denied' : 'unavailable',
+          ),
+          { enableHighAccuracy: false, timeout: 12_000, maximumAge: 5 * 60_000 },
+        )
       },
-      () => callbacksRef.current.onLocationResult('denied'),
-      { enableHighAccuracy: true, timeout: 8000 },
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 60_000 },
     )
   }, [locateRequest])
 
-  return <div ref={targetRef} className="absolute inset-0" aria-label="VWorld 기반 동물병원 및 동물약국 지도" />
+  return <div ref={targetRef} className="absolute inset-0" aria-label="현재 위치 주변 시설 지도" />
 }
