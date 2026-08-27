@@ -15,9 +15,9 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { useSearchParams } from 'react-router'
-import { listMapPlaces, searchVWorld } from '@/features/map/api'
+import { listNearbyMapPlaces, searchVWorld } from '@/features/map/api'
 import { MapCanvas } from '@/features/map/MapCanvas'
-import type { BackendMapPlaceType, MapBounds, MapPlace, MapPlaceType } from '@/features/map/types'
+import type { BackendMapPlaceType, MapBounds, MapCenter, MapPlace } from '@/features/map/types'
 import { cn } from '@/lib/cn'
 
 type SearchMode = 'ALL' | BackendMapPlaceType
@@ -32,24 +32,33 @@ const PLACE_TYPE_META = {
   VWORLD: { label: 'VWorld 검색', icon: MapPin },
   HOSPITAL: SEARCH_MODE_META.HOSPITAL,
   PHARMACY: SEARCH_MODE_META.PHARMACY,
-} satisfies Record<MapPlaceType, { label: string; icon: typeof FirstAid }>
+} as const
 
 const SEARCH_MODES: SearchMode[] = ['ALL', 'HOSPITAL', 'PHARMACY']
 
 type MapActions = { zoomIn: () => void; zoomOut: () => void }
 
+function formatDistance(distanceMeters: number | null) {
+  if (distanceMeters == null) return null
+  if (distanceMeters < 1000) return `${Math.round(distanceMeters)}m`
+  return `${(distanceMeters / 1000).toFixed(1)}km`
+}
+
 export function MapPage() {
   const [params, setParams] = useSearchParams()
   const requestedType = params.get('type')
+  const locateIntent = params.get('intent') === 'locate'
   const mode: SearchMode = requestedType === 'HOSPITAL' || requestedType === 'PHARMACY'
     ? requestedType
     : 'ALL'
-  const [bounds, setBounds] = useState<MapBounds | null>(null)
+  const [nearbyCenter, setNearbyCenter] = useState<MapCenter | null>(null)
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedPlace, setSelectedPlace] = useState<MapPlace | null>(null)
-  const [locateRequest, setLocateRequest] = useState(params.get('intent') === 'locate' ? 1 : 0)
-  const [locationStatus, setLocationStatus] = useState<'idle' | 'pending' | 'found' | 'denied'>('idle')
+  const [locateRequest, setLocateRequest] = useState(locateIntent ? 1 : 0)
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'pending' | 'found' | 'denied' | 'unavailable'>(
+    locateIntent ? 'pending' : 'idle',
+  )
   const [mapActions, setMapActions] = useState<MapActions | null>(null)
   const [isPanelCollapsed, setIsPanelCollapsed] = useState(false)
   const hasVworldKey = Boolean(import.meta.env.VITE_VWORLD_API_KEY)
@@ -60,9 +69,16 @@ export function MapPage() {
   }, [search])
 
   const placesQuery = useQuery({
-    queryKey: ['map-places', mode, bounds],
-    queryFn: ({ signal }) => listMapPlaces(mode as BackendMapPlaceType, bounds!, signal),
-    enabled: mode !== 'ALL' && bounds != null,
+    queryKey: ['map-places-nearby', mode, nearbyCenter],
+    queryFn: ({ signal }) => listNearbyMapPlaces(
+      mode as BackendMapPlaceType,
+      nearbyCenter!,
+      signal,
+    ),
+    enabled:
+      mode !== 'ALL' &&
+      nearbyCenter != null &&
+      (!locateIntent || locationStatus !== 'pending'),
     placeholderData: (previous) => previous,
   })
 
@@ -98,6 +114,13 @@ export function MapPage() {
     setLocateRequest((request) => request + 1)
   }
 
+  const updateBounds = (nextBounds: MapBounds) => {
+    setNearbyCenter({
+      longitude: Number(((nextBounds.minLongitude + nextBounds.maxLongitude) / 2).toFixed(6)),
+      latitude: Number(((nextBounds.minLatitude + nextBounds.maxLatitude) / 2).toFixed(6)),
+    })
+  }
+
   return (
     <div className="relative min-h-[calc(100dvh-7.5rem)] flex-1 overflow-hidden bg-map-canvas md:min-h-0">
       <h1 className="sr-only">반려동물 의료 지도</h1>
@@ -106,9 +129,12 @@ export function MapPage() {
         places={places}
         selectedPlace={selectedPlace}
         onSelectPlace={setSelectedPlace}
-        onBoundsChange={setBounds}
+        onBoundsChange={updateBounds}
         locateRequest={locateRequest}
-        onLocationResult={(result) => setLocationStatus(result)}
+        onLocationResult={(result, center) => {
+          setLocationStatus(result)
+          if (center) setNearbyCenter(center)
+        }}
         onMapReady={setMapActions}
       />
 
@@ -242,6 +268,11 @@ export function MapPage() {
                     <span className="min-w-0">
                       <span className="block truncate font-bold">{place.name}</span>
                       <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">{place.address ?? '주소 정보 없음'}</span>
+                      {formatDistance(place.distanceMeters) && (
+                        <span className="mt-1 mr-2 inline-block text-[13px] font-semibold text-muted-foreground">
+                          {formatDistance(place.distanceMeters)}
+                        </span>
+                      )}
                       {place.status && <span className="mt-1 inline-block text-[13px] font-medium text-primary-strong">{place.status}</span>}
                     </span>
                   </div>
@@ -273,18 +304,23 @@ export function MapPage() {
         <Crosshair size={21} className={locationStatus === 'pending' ? 'animate-pulse text-primary-strong' : undefined} />
       </button>
 
-      {locationStatus === 'denied' && (
+      {(locationStatus === 'denied' || locationStatus === 'unavailable') && (
         <div role="status" className="absolute right-3 top-[10.5rem] z-10 rounded-lg border border-border bg-surface px-3 py-2 text-[13px] shadow-[var(--dg-shadow-md)] md:right-5 md:top-[11.25rem]">
-          위치 권한을 확인해 주세요.
+          {locationStatus === 'denied' ? '위치 권한을 확인해 주세요.' : '현재 위치를 확인하지 못했습니다.'}
         </div>
       )}
 
       {selectedPlace && (
         <section aria-label="선택한 장소" className="absolute left-1/2 top-4 z-10 hidden w-[min(420px,calc(100%-2rem))] -translate-x-1/2 rounded-2xl border border-border bg-surface p-4 shadow-[var(--dg-shadow-map)] md:block">
           <button type="button" onClick={() => setSelectedPlace(null)} aria-label="장소 정보 닫기" className="absolute right-2 top-2 grid size-9 place-items-center rounded-full hover:bg-muted"><X size={17} /></button>
-          <p className={cn('text-[13px] font-bold', selectedPlace.type === 'HOSPITAL' ? 'text-map-hospital' : selectedPlace.type === 'PHARMACY' ? 'text-map-pharmacy' : 'text-primary-strong')}>{PLACE_TYPE_META[selectedPlace.type].label}</p>
+          <p className={cn('text-[13px] font-bold', selectedPlace.type === 'HOSPITAL' ? 'text-map-hospital' : selectedPlace.type === 'PHARMACY' ? 'text-map-pharmacy' : 'text-primary-strong')}>{selectedPlace.type in PLACE_TYPE_META ? PLACE_TYPE_META[selectedPlace.type as keyof typeof PLACE_TYPE_META].label : '주변 시설'}</p>
           <h2 className="pr-8 text-lg font-extrabold">{selectedPlace.name}</h2>
           <p className="mt-1 text-[14px] text-muted-foreground">{selectedPlace.address ?? '주소 정보 없음'}</p>
+          {formatDistance(selectedPlace.distanceMeters) && (
+            <p className="mt-1 text-[13px] font-semibold text-muted-foreground">
+              중심점에서 {formatDistance(selectedPlace.distanceMeters)}
+            </p>
+          )}
           {selectedPlace.phoneNumber && <a href={`tel:${selectedPlace.phoneNumber}`} className="mt-3 inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-primary-subtle px-3 font-semibold text-primary-strong"><Phone size={17} /> 전화하기</a>}
         </section>
       )}

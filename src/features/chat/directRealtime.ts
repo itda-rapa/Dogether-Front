@@ -15,6 +15,8 @@ import type { ChatMessage } from './types'
 
 const DIRECT_MESSAGES_QUEUE = '/user/queue/chat/messages'
 const DIRECT_ERRORS_QUEUE = '/user/queue/errors'
+const DIRECT_WEBSOCKET_ENABLED =
+  import.meta.env.VITE_DIRECT_WEBSOCKET_ENABLED === 'true'
 const sendDestination = (roomId: number) =>
   `/app/chat/direct/rooms/${roomId}/messages`
 
@@ -206,6 +208,13 @@ function open() {
 
 /** 로그인 상태일 때만 호출한다(AuthProvider 가 hasSession 을 보고 부른다). */
 export function connect(nextDeps: RealtimeDeps) {
+  // 백엔드의 app.websocket.enabled 기본값은 false다. 서버가 꺼진 환경에서
+  // 브라우저가 /ws 연결과 지수 백오프 재시도를 무한 반복하지 않게 한다.
+  // 실시간 1:1 채팅을 함께 켠 배포에서만 명시적으로 활성화한다.
+  if (!DIRECT_WEBSOCKET_ENABLED) {
+    deps = null
+    return
+  }
   deps = nextDeps
   backoffMs = 1000
   open()

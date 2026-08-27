@@ -10,7 +10,28 @@ export type PetSearchItem = {
   relationship: 'NONE' | 'REQUEST_SENT' | 'REQUEST_RECEIVED' | 'FRIEND' | null
 }
 
-export type ChatMessageType = 'TEXT' | 'CARD' | 'SYSTEM'
+import type { CulturalFacilityCategory } from '@/features/map/types'
+
+export type ChatMessageType = 'TEXT' | 'CARD' | 'MAP' | 'SYSTEM'
+
+export type ChatMapFacility = {
+  facilityId: number
+  name: string | null
+  address: string | null
+  telephone: string | null
+  operatingHours: string | null
+  longitude: number
+  latitude: number
+  distanceMeters: number | null
+  averageDistanceMeters: number | null
+  distanceParticipantCount: number | null
+  distanceRank: number | null
+}
+
+export type ChatMapMessage = {
+  category: CulturalFacilityCategory
+  facilities: ChatMapFacility[]
+}
 
 export type ChatMessage = {
   messageId: number
@@ -20,6 +41,7 @@ export type ChatMessage = {
   senderPetNickname: string | null
   type: ChatMessageType
   body: string | null
+  map: ChatMapMessage | null
   meetingCardId: number | null
   clientMessageId: string | null
   createdAt: string
@@ -110,10 +132,17 @@ export function canDraftMeeting(messages: ChatMessage[], now = Date.now()) {
 /** 같은 messageId 가 중복 적재되지 않도록 병합한다. 폴링이 겹칠 수 있기 때문. */
 export function mergeMessages(prev: ChatMessage[], incoming: ChatMessage[]) {
   if (incoming.length === 0) return prev
-  const seen = new Set(prev.map((m) => m.messageId))
-  const added = incoming.filter((m) => !seen.has(m.messageId))
-  if (added.length === 0) return prev
-  return [...prev, ...added].sort((a, b) => a.messageId - b.messageId)
+  const merged = new Map(prev.map((message) => [message.messageId, message]))
+  incoming.forEach((message) => {
+    const existing = merged.get(message.messageId)
+    merged.set(message.messageId, {
+      ...existing,
+      ...message,
+      senderPetNickname:
+        message.senderPetNickname ?? existing?.senderPetNickname ?? null,
+    })
+  })
+  return [...merged.values()].sort((a, b) => a.messageId - b.messageId)
 }
 
 export function formatTime(iso: string) {
