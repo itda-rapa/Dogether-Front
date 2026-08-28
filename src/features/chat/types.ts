@@ -1,5 +1,7 @@
 /** 04_M1_OpenAPI.yaml 의 Chat 스키마. 필드명·enum 을 임의로 바꾸지 않는다. */
 
+import type { CulturalFacilityCategory } from '@/features/map/types'
+
 export type PetSearchItem = {
   petId: number
   publicTag: string
@@ -10,9 +12,14 @@ export type PetSearchItem = {
   relationship: 'NONE' | 'REQUEST_SENT' | 'REQUEST_RECEIVED' | 'FRIEND' | null
 }
 
-import type { CulturalFacilityCategory } from '@/features/map/types'
-
-export type ChatMessageType = 'TEXT' | 'CARD' | 'MAP' | 'SYSTEM'
+export type ChatMessageType =
+  | 'TEXT'
+  | 'CARD'
+  | 'MAP'
+  | 'IMAGE'
+  | 'VIDEO'
+  | 'SETLOG_SHARE'
+  | 'SYSTEM'
 
 export type ChatMapFacility = {
   facilityId: number
@@ -33,6 +40,40 @@ export type ChatMapMessage = {
   facilities: ChatMapFacility[]
 }
 
+/** IMAGE/VIDEO 메시지의 media 첨부. Presigned URL 은 조회 시점에 발급되며 영구 저장되지 않는다. */
+export type ChatMessageAttachment = {
+  mediaId: number
+  mediaType: 'IMAGE' | 'VIDEO'
+  contentType: string
+  fileSize: number
+  url: string
+  expiresAt: string
+}
+
+export type SharedSetlogMedia = {
+  mediaId: number
+  mediaType: 'IMAGE' | 'VIDEO'
+  url: string
+  expiresAt: string
+}
+
+/**
+ * SETLOG_SHARE 메시지의 공유 Setlog 요약. 조회 시점의 접근 가능 여부이며,
+ * `available=false` 면 나머지 필드는 null 이다(원문을 노출하지 않는다).
+ */
+export type SharedSetlog = {
+  setlogId: number
+  available: boolean
+  unavailableReason: string | null
+  authorPetId: number | null
+  authorPetNickname: string | null
+  caption: string | null
+  media: SharedSetlogMedia | null
+  reactionCount: number | null
+  /** `/setlogs/{setlogId}` 형태. GET /setlogs/{setlogId} 로 상세를 연다. */
+  detailPath: string | null
+}
+
 export type ChatMessage = {
   messageId: number
   roomId: number
@@ -42,6 +83,10 @@ export type ChatMessage = {
   type: ChatMessageType
   body: string | null
   map: ChatMapMessage | null
+  /** IMAGE/VIDEO 일 때만 채워진다. 방 목록(lastMessage)에는 hydrate 되지 않는다. */
+  attachment?: ChatMessageAttachment | null
+  /** SETLOG_SHARE 일 때만 채워진다. 방 목록(lastMessage)에는 hydrate 되지 않는다. */
+  sharedSetlog?: SharedSetlog | null
   meetingCardId: number | null
   clientMessageId: string | null
   createdAt: string

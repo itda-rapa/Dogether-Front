@@ -7,7 +7,7 @@ import { useTheme } from '@/app/theme-context'
 import { useAuth } from '@/features/auth/auth-context'
 import { listMyPets } from '@/features/pet/api'
 import { listNeighborhoods } from '@/features/auth/api'
-import { listNotifications } from '@/features/chat/api'
+import { getUnreadNotificationCount } from '@/features/chat/api'
 import { cn } from '@/lib/cn'
 
 /**
@@ -73,15 +73,13 @@ function Header() {
     queryFn: listNeighborhoods,
     enabled: !!me,
   })
-  const notifications = useQuery({
-    queryKey: ['notifications', me?.activePetId],
-    queryFn: listNotifications,
+  const unreadNotifications = useQuery({
+    queryKey: ['notifications', 'unread-count', me?.activePetId],
+    queryFn: getUnreadNotificationCount,
     enabled: me?.activePetId != null,
     refetchInterval: 30_000,
   })
-  const unreadCount = me
-    ? (notifications.data?.filter((item) => !item.readAt).length ?? 0)
-    : 0
+  const unreadCount = me ? (unreadNotifications.data?.unreadCount ?? 0) : 0
 
   const hasActivePet = me?.activePetId != null
   const activePetNickname = pets.data?.find(

@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { CaretRight, Flag, ShieldCheck, Stack } from '@phosphor-icons/react'
+import { CaretRight, ChartBar, Flag, ShieldCheck, ShieldWarning, Stack } from '@phosphor-icons/react'
 import { BackLink } from '@/components/ui/BackLink'
 import { useAuth } from '@/features/auth/auth-context'
 
@@ -12,6 +12,18 @@ const ADMIN_MENU: { label: string; description: string; to: string; icon: typeof
     description: '접수된 채팅방 신고를 조회하고 처리합니다.',
     to: '/admin/reports',
     icon: Flag,
+  },
+  {
+    label: '안전 검토 Queue',
+    description: '자동 탐지된 위험 신호를 검토하고 처리합니다.',
+    to: '/admin/safety',
+    icon: ShieldWarning,
+  },
+  {
+    label: '서비스 통계',
+    description: '기간별 가입·신고·안전·스토리지 지표를 확인합니다.',
+    to: '/admin/dashboard',
+    icon: ChartBar,
   },
   {
     label: '게시판 관리',

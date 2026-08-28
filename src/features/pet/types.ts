@@ -27,6 +27,32 @@ export type Pet = {
   verified: boolean
   verifiedAt?: string | null
   active: boolean
+  /** 낙관적 동시성. 프로필 사진 PUT/DELETE 의 If-Match 에 그대로 실어 보낸다. */
+  version: number
+  /** 삭제되지 않은 게시글·댓글이 받은 HELPFUL 합계. LIKE 는 포함하지 않는다. */
+  helpfulReceivedCount: number
+}
+
+/**
+ * GET /pets/{petId}/profile 응답. 관리용 상세 조회(Pet)와 분리된 공개 프로필 계약이다.
+ * ACTIVE·미삭제 Pet, ACTIVE 소유자만 대상이며 어느 방향이든 Block 이면 404 로 숨긴다.
+ */
+export type PetPublicProfile = {
+  petId: number
+  publicTag: string
+  nickname: string
+  profileUrl: string | null
+  verified: boolean
+  breedName: string | null
+  sex: PetSex
+  neutered: boolean | null
+  birthDate: string | null
+  sizeCode: PetSize
+  bio: string | null
+  personalityTags: string[]
+  helpfulReceivedCount: number
+  /** 자기 Pet 이거나 조회자에게 Active Pet 이 없으면 null. */
+  relationship: 'NONE' | 'REQUEST_SENT' | 'REQUEST_RECEIVED' | 'FRIEND' | null
 }
 
 export const SEX_LABEL: Record<'MALE' | 'FEMALE' | 'UNKNOWN', string> = {

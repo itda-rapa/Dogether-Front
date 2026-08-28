@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import {
   CaretRight,
   SealCheck,
@@ -10,18 +13,32 @@ import {
   ArrowClockwise,
   Plus,
   CalendarCheck,
+  PawPrint,
+  PencilSimple,
   UserCircle,
+  X,
 } from '@phosphor-icons/react'
 import { ApiError } from '@/lib/api'
 import { Page } from '@/components/ui/Page'
 import { AvatarUpload } from '@/components/ui/AvatarUpload'
+import { Button } from '@/components/ui/Button'
+import { Field } from '@/components/ui/Field'
+import { inputClass } from '@/components/ui/input-class'
 import { useAuth } from '@/features/auth/auth-context'
 import {
   selectActivePet,
   listNeighborhoods,
+  updateMe,
   updateMyAvatar,
 } from '@/features/auth/api'
-import { listMyPets, updatePetProfileImage } from '@/features/pet/api'
+import { formatNeighborhood } from '@/features/auth/types'
+import type { Me, Neighborhood, UpdateMeBody } from '@/features/auth/types'
+import {
+  deletePetProfileImage,
+  listMyPets,
+  replacePetProfileImage,
+  updatePetProfileImage,
+} from '@/features/pet/api'
 import { ageFrom, type Pet } from '@/features/pet/types'
 import { listMyMeetingCards } from '@/features/meeting/api'
 import { CARD_TYPE_LABEL, type MeetingCardListItem } from '@/features/meeting/types'
@@ -39,6 +56,7 @@ const MENU: { label: string; to: string }[] = [
   { label: '나의 장소', to: '/me/places' },
   { label: '차단 목록', to: '/me/blocks' },
   { label: '숨긴 셋로그', to: '/me/hidden-setlogs' },
+  { label: '반려동물 의료비 지원사업', to: '/me/medical-support' },
   { label: '공지사항', to: '/notices' },
   { label: 'Q&A', to: '/qna' },
   { label: 'FAQ', to: '/faq' },
@@ -48,6 +66,7 @@ export function MePage() {
   const { me, meStatus, meError, refetchMe, signOut } = useAuth()
   const queryClient = useQueryClient()
   const [petsOpen, setPetsOpen] = useState(true)
+  const [editOpen, setEditOpen] = useState(false)
 
   const pets = useQuery({
     queryKey: ['pets', 'me'],
@@ -125,11 +144,20 @@ export function MePage() {
               {me.email}
             </p>
           </div>
+          <button
+            type="button"
+            aria-label="프로필 수정"
+            onClick={() => setEditOpen(true)}
+            className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-primary-subtle"
+          >
+            <PencilSimple size={20} />
+          </button>
         </div>
 
         <dl className="mt-4 flex flex-col gap-2 text-[14px]">
           <Row term="공개 태그" desc={me.publicTag} mono />
           <Row term="동네" desc={neighborhoodLabel ?? me.neighborhoodCode} />
+          <Row term="몸무게" desc={formatWeight(me.weightKg)} />
         </dl>
 
         {/* L1 = Active Pet 이 없는 상태. 대부분의 기능이 막히므로 먼저 알린다. */}
@@ -231,6 +259,19 @@ export function MePage() {
         <h2 className="mb-3 text-lg font-bold">메뉴</h2>
         <ul className="overflow-hidden rounded-xl border border-border bg-surface">
           <UpcomingMeetingsMenuItem myPetId={me.activePetId} />
+          {/* Figma 메뉴 밖 항목(#166) — "다가오는 약속"과 같은 이유로 MENU 배열엔 안 넣는다. */}
+          <li className="border-t border-border">
+            <Link
+              to="/me/footprints"
+              className="flex min-h-11 items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-primary-subtle"
+            >
+              <span className="flex items-center gap-2">
+                <PawPrint size={18} className="text-muted-foreground" />
+                발자국
+              </span>
+              <CaretRight size={18} className="text-muted-foreground" />
+            </Link>
+          </li>
           {MENU.map((item) => (
             <li key={item.label} className="border-t border-border">
               <Link
@@ -271,8 +312,209 @@ export function MePage() {
         <SignOut size={20} />
         로그아웃
       </button>
+
+      {editOpen && (
+        <EditProfileModal
+          me={me}
+          neighborhoods={neighborhoods.data ?? []}
+          neighborhoodsPending={neighborhoods.isPending}
+          neighborhoodsError={neighborhoods.isError}
+          onClose={() => setEditOpen(false)}
+        />
+      )}
     </Page>
   )
+}
+
+const profileSchema = z.object({
+  nickname: z
+    .string()
+    .trim()
+    .min(2, '닉네임은 2~20자로 입력해 주세요.')
+    .max(20, '닉네임은 2~20자로 입력해 주세요.'),
+  neighborhoodCode: z.string().min(1, '동네를 선택해 주세요.'),
+  /** 빈 문자열 = 미입력/삭제. 값이 있으면 1~500, 소수점 최대 2자리만 허용한다(#173). */
+  weightKg: z
+    .string()
+    .trim()
+    .refine(
+      (v) => v === '' || (/^\d{1,3}(\.\d{1,2})?$/.test(v) && Number(v) >= 1 && Number(v) <= 500),
+      '1~500 사이 숫자로, 소수점 둘째 자리까지 입력해 주세요.',
+    ),
+})
+type ProfileFormValues = z.input<typeof profileSchema>
+
+/**
+ * 닉네임·동네·몸무게 수정 바텀시트(#173 PATCH /me).
+ *
+ * 바뀐 필드만 body 에 실어 보낸다 — 서버가 빈 객체·unknown property 를 거부하고,
+ * nickname/neighborhoodCode 는 명시적 null 도 거부한다. weightKg 만 비우면
+ * null 로 보내 삭제 의미가 된다.
+ */
+function EditProfileModal({
+  me,
+  neighborhoods,
+  neighborhoodsPending,
+  neighborhoodsError,
+  onClose,
+}: {
+  me: Me
+  neighborhoods: Neighborhood[]
+  neighborhoodsPending: boolean
+  neighborhoodsError: boolean
+  onClose: () => void
+}) {
+  const queryClient = useQueryClient()
+  const { register, handleSubmit, formState } = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
+    mode: 'onTouched',
+    defaultValues: {
+      nickname: me.nickname,
+      neighborhoodCode: me.neighborhoodCode,
+      weightKg: me.weightKg != null ? String(me.weightKg) : '',
+    },
+  })
+
+  const save = useMutation({
+    mutationFn: (body: UpdateMeBody) => updateMe(body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['me'] })
+      onClose()
+    },
+  })
+
+  const onSubmit = handleSubmit((values) => {
+    const body: UpdateMeBody = {}
+
+    const nickname = values.nickname.trim()
+    if (nickname !== me.nickname) body.nickname = nickname
+
+    if (values.neighborhoodCode !== me.neighborhoodCode) {
+      body.neighborhoodCode = values.neighborhoodCode
+    }
+
+    const trimmedWeight = values.weightKg.trim()
+    const nextWeight = trimmedWeight === '' ? null : Number(trimmedWeight)
+    if (nextWeight !== (me.weightKg ?? null)) body.weightKg = nextWeight
+
+    if (Object.keys(body).length === 0) {
+      onClose()
+      return
+    }
+    save.mutate(body)
+  })
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end bg-black/40"
+      role="dialog"
+      aria-modal="true"
+      aria-label="프로필 수정"
+    >
+      <div className="max-h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-surface p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold">프로필 수정</h2>
+          <button
+            type="button"
+            aria-label="닫기"
+            onClick={onClose}
+            className="grid size-11 place-items-center rounded-full hover:bg-primary-subtle"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-4">
+          <Field label="닉네임" error={formState.errors.nickname?.message}>
+            {({ id, describedBy, invalid }) => (
+              <input
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                className={inputClass(invalid)}
+                maxLength={20}
+                {...register('nickname')}
+              />
+            )}
+          </Field>
+
+          <Field
+            label="동네"
+            error={
+              formState.errors.neighborhoodCode?.message ??
+              (neighborhoodsError ? '동네 목록을 불러오지 못했습니다.' : undefined)
+            }
+          >
+            {({ id, describedBy, invalid }) => (
+              <select
+                id={id}
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                disabled={neighborhoods.length === 0}
+                className={inputClass(invalid)}
+                {...register('neighborhoodCode')}
+              >
+                {/*
+                  neighborhoods 가 아직 안 불러와진 상태에서 me.neighborhoodCode 를
+                  defaultValue 로 등록하면 매칭되는 option 이 없어 select 가 깨진다
+                  (SignupPage 와 같은 함정). 로딩·현재 값 placeholder 로 항상 매칭시킨다.
+                */}
+                {neighborhoods.length === 0 && (
+                  <option value={me.neighborhoodCode}>
+                    {neighborhoodsPending
+                      ? '불러오는 중…'
+                      : neighborhoodsError
+                        ? '불러오지 못했습니다'
+                        : '동네를 선택하세요'}
+                  </option>
+                )}
+                {neighborhoods.map((n) => (
+                  <option key={n.code} value={n.code}>
+                    {formatNeighborhood(n)}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+
+          <Field
+            label="몸무게(kg)"
+            hint="비워두면 삭제됩니다."
+            error={formState.errors.weightKg?.message}
+          >
+            {({ id, describedBy, invalid }) => (
+              <input
+                id={id}
+                type="text"
+                inputMode="decimal"
+                placeholder="예: 65.5"
+                aria-describedby={describedBy}
+                aria-invalid={invalid}
+                className={inputClass(invalid)}
+                {...register('weightKg')}
+              />
+            )}
+          </Field>
+
+          {save.isError && (
+            <p role="alert" className="text-[14px] text-destructive">
+              {save.error instanceof ApiError
+                ? save.error.message
+                : '프로필을 수정하지 못했습니다.'}
+            </p>
+          )}
+
+          <Button type="submit" disabled={save.isPending}>
+            {save.isPending ? '저장 중…' : '저장'}
+          </Button>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function formatWeight(weightKg: number | null): string {
+  return weightKg == null ? '미입력' : `${weightKg}kg`
 }
 
 /**
@@ -499,7 +741,18 @@ function PetRow({
         size={44}
         fallback={<Dog size={22} />}
         onUploaded={async (result) => {
-          await updatePetProfileImage(pet.petId, result.media.id)
+          // 최초 설정은 POST, 이미 사진이 있으면 PUT(If-Match) 로 교체한다.
+          // POST 를 이미 사진이 있는 펫에 다시 호출하면 서버가
+          // PET_PROFILE_IMAGE_ALREADY_SET 으로 거절한다.
+          if (pet.profileUrl) {
+            await replacePetProfileImage(pet.petId, result.media.id, pet.version)
+          } else {
+            await updatePetProfileImage(pet.petId, result.media.id)
+          }
+          await queryClient.invalidateQueries({ queryKey: ['pets', 'me'] })
+        }}
+        onRemove={async () => {
+          await deletePetProfileImage(pet.petId, pet.version)
           await queryClient.invalidateQueries({ queryKey: ['pets', 'me'] })
         }}
       />

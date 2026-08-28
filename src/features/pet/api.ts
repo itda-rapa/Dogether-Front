@@ -1,6 +1,7 @@
 import { apiRequest } from '@/lib/api'
 import type {
   Pet,
+  PetPublicProfile,
   PetSex,
   PetSize,
   PetVerificationIssueBody,
@@ -87,6 +88,35 @@ export function updatePetProfileImage(petId: number, mediaId: number) {
     method: 'POST',
     body: { mediaId },
   })
+}
+
+/**
+ * 프로필 사진 교체. 이미 사진이 설정된 펫에만 쓴다(없으면 POST 가 최초 설정).
+ * `If-Match` 는 큰따옴표로 감싼 현재 `version` 하나만 허용한다. stale version 은
+ * 409 CONCURRENT_UPDATE_CONFLICT.
+ */
+export function replacePetProfileImage(petId: number, mediaId: number, version: number) {
+  return apiRequest<Pet>(`/pets/${petId}/profile-image`, {
+    method: 'PUT',
+    body: { mediaId },
+    headers: { 'If-Match': `"${version}"` },
+  })
+}
+
+/** 프로필 사진 제거. Media row 는 그대로 두고 Pet 의 link 만 지운다. */
+export function deletePetProfileImage(petId: number, version: number) {
+  return apiRequest<void>(`/pets/${petId}/profile-image`, {
+    method: 'DELETE',
+    headers: { 'If-Match': `"${version}"` },
+  })
+}
+
+/**
+ * 공개 프로필 조회. 관리용 `getPet`(내 펫만 허용)과 달리 다른 사람 펫도 조회할 수 있다.
+ * 대상이 비공개 상태이거나 양방향 차단이면 서버가 404 PET_NOT_FOUND 로 숨긴다.
+ */
+export function getPetPublicProfile(petId: number) {
+  return apiRequest<PetPublicProfile>(`/pets/${petId}/profile`)
 }
 
 /**

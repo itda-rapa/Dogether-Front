@@ -15,11 +15,18 @@ export function SharedFacilityMapMessage({
   roomId,
   messageId,
   senderNickname,
+  /**
+   * "이 장소로 약속 만들기"는 오픈챗 전용 `POST /chat/rooms/open/{roomId}/place-drafts`를
+   * 부른다 — DIRECT 방에는 그 엔드포인트가 없다. DIRECT에서는 이 버튼 자체를 숨긴다
+   * (거짓으로 실패하는 버튼을 보여주는 대신). 기본값은 기존 오픈챗 동작 유지.
+   */
+  allowPlaceDraft = true,
 }: {
   map: ChatMapMessage
   roomId: number
   messageId: number
   senderNickname: string | null
+  allowPlaceDraft?: boolean
 }) {
   const navigate = useNavigate()
   const [liveMap, setLiveMap] = useState(map)
@@ -238,7 +245,7 @@ export function SharedFacilityMapMessage({
               />
             </dl>
 
-            {createDraft.isError && (
+            {allowPlaceDraft && createDraft.isError && (
               <p role="alert" className="mt-3 text-[13px] text-destructive">
                 {createDraft.error instanceof ApiError
                   ? createDraft.error.message
@@ -246,14 +253,16 @@ export function SharedFacilityMapMessage({
               </p>
             )}
 
-            <Button
-              className="mt-5 w-full"
-              disabled={createDraft.isPending}
-              onClick={() => createDraft.mutate(detailPlace)}
-            >
-              <CalendarPlus size={20} weight="bold" />
-              {createDraft.isPending ? '약속 준비 중…' : '이 장소로 약속 만들기'}
-            </Button>
+            {allowPlaceDraft && (
+              <Button
+                className="mt-5 w-full"
+                disabled={createDraft.isPending}
+                onClick={() => createDraft.mutate(detailPlace)}
+              >
+                <CalendarPlus size={20} weight="bold" />
+                {createDraft.isPending ? '약속 준비 중…' : '이 장소로 약속 만들기'}
+              </Button>
+            )}
           </section>
         </div>
       )}

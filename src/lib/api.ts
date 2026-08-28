@@ -43,6 +43,8 @@ type RequestOptions = {
   /** 인증 헤더를 붙이지 않는다. 로그인·회원가입·동네 목록에 쓴다. */
   anonymous?: boolean
   signal?: AbortSignal
+  /** If-Match 등 추가 헤더. Authorization·Content-Type 은 덮어쓰지 않는다. */
+  headers?: Record<string, string>
 }
 
 /** 토큰 접근자. AuthProvider 가 주입한다(순환 의존을 피하기 위한 구조). */
@@ -65,12 +67,12 @@ export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  const { method = 'GET', body, anonymous = false, signal } = options
+  const { method = 'GET', body, anonymous = false, signal, headers: extraHeaders } = options
 
   const send = async (token: string | null) => {
-    const headers: Record<string, string> = {}
-    if (body !== undefined) headers['Content-Type'] = 'application/json'
-    if (token) headers.Authorization = `Bearer ${token}`
+    const headers: Record<string, string> = { ...extraHeaders }
+    if (body !== undefined && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
+    if (token && !headers.Authorization) headers.Authorization = `Bearer ${token}`
 
     try {
       return await fetch(`${BASE_URL}${path}`, {

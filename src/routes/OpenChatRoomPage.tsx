@@ -23,6 +23,7 @@ import { FALLBACK_MESSAGE, splitDraftDateTime } from '@/features/meeting/types'
 import {
   detectPlaceKeyword,
   keywordFromPlaceType,
+  placeConsentStorageKey,
   placeTypeFromKeyword,
 } from '@/features/chat/placeSuggestion'
 import { InlineFacilityMap } from '@/features/chat/InlineFacilityMap'
@@ -687,10 +688,6 @@ function messageForSendError(error: unknown) {
     return '채팅방에 다시 입장한 뒤 메시지를 보내 주세요.'
   }
   return '메시지를 보내지 못했습니다. 잠시 후 다시 시도해 주세요.'
-}
-
-function placeConsentStorageKey(roomId: number, activePetId: number) {
-  return `chat:map-consent:${roomId}:pet:${activePetId}`
 }
 
 function formatDraftDateTime(draft: OpenChatCardDraft): string {

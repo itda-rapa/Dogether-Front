@@ -38,17 +38,20 @@ export function listChatMessages(
   )
 }
 
+type SendChatMessageInput =
+  | { clientMessageId: string; body: string }
+  | { clientMessageId: string; type: 'IMAGE' | 'VIDEO'; mediaId: number }
+  | { clientMessageId: string; type: 'SETLOG_SHARE'; setlogId: number }
+
 /**
- * TEXT 메시지 전송.
+ * 메시지 전송. TEXT 는 `type` 을 생략해도 서버가 기존 계약대로 TEXT 로 정규화한다.
+ * IMAGE/VIDEO/SETLOG_SHARE 는 `type` 이 필수다.
  *
  * clientMessageId 로 재시도 멱등성을 보장한다. 같은 값으로 다시 보내면
  * 서버가 201 대신 200 으로 기존 메시지를 돌려주므로 중복이 생기지 않는다.
  * 따라서 재시도할 때 새 id 를 만들면 안 된다.
  */
-export function sendChatMessage(
-  roomId: number,
-  input: { clientMessageId: string; body: string },
-) {
+export function sendChatMessage(roomId: number, input: SendChatMessageInput) {
   return apiRequest<ChatMessage>(`/chat/rooms/${roomId}/messages`, {
     method: 'POST',
     body: input,
@@ -191,19 +194,52 @@ export function deleteOpenChatRoom(roomId: number) {
   })
 }
 
+/** #169 통합 인앱 알림. 8종 전부 이 하나의 봉투로 온다 — 타입별로 응답이 갈리지 않는다. */
+export type NotificationType =
+  | 'OPEN_CHAT_INVITE'
+  | 'BOARD_POST_LIKE'
+  | 'BOARD_POST_HELPFUL'
+  | 'BOARD_COMMENT_HELPFUL'
+  | 'BOARD_COMMENT_CREATED'
+  | 'BOARD_REPLY_CREATED'
+  | 'SETLOG_LIKE'
+  | 'SETLOG_CUTE'
+
+export type NotificationTargetType =
+  | 'OPEN_CHAT_ROOM'
+  | 'BOARD_POST'
+  | 'BOARD_COMMENT'
+  | 'SETLOG'
+
 export type AppNotification = {
   notificationId: number
-  type: 'OPEN_CHAT_INVITE'
-  roomId: number
-  roomTitle: string
+  type: NotificationType
+  targetType: NotificationTargetType
+  targetId: number
+  /** OPEN_CHAT_INVITE 에서만 채워진다. */
+  roomId: number | null
+  /** 채팅 알림에서만 채워진다 — 그 외 타입은 항상 null. */
+  roomTitle: string | null
+  postId: number | null
+  setlogId: number | null
   actorPetId: number
   actorPetNickname: string
+  actorProfileAssetId: number | null
+  /** BOARD_COMMENT_CREATED/BOARD_REPLY_CREATED 에서만 채워진다. */
+  commentPreview: string | null
+  /** 조회 시점 접근 가능 여부. false 면 원문·이동 링크를 보여주면 안 된다(존재 은닉). */
+  targetAvailable: boolean
   createdAt: string
   readAt: string | null
 }
 
 export function listNotifications() {
   return apiRequest<AppNotification[]>('/notifications')
+}
+
+/** 헤더 배지용. 목록 전체를 안 받고 읽지 않은 개수만 받는다. */
+export function getUnreadNotificationCount() {
+  return apiRequest<{ unreadCount: number }>('/notifications/unread-count')
 }
 
 export function markNotificationRead(notificationId: number) {

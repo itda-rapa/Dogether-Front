@@ -1,76 +1,58 @@
 import { useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router'
+import { Link, useParams } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Dog, SealCheck, UserPlus } from '@phosphor-icons/react'
+import { Dog, HandHeart, SealCheck, UserPlus } from '@phosphor-icons/react'
 import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
 import { BackLink } from '@/components/ui/BackLink'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { sendFriendRequest } from '@/features/friend/api'
-import { listSetlogs } from '@/features/setlog/api'
-import type { PetSearchItem } from '@/features/chat/types'
+import { getPetPublicProfile } from '@/features/pet/api'
+import { SEX_LABEL, SIZE_LABEL, ageFrom, type PetPublicProfile } from '@/features/pet/types'
 import { ApiError } from '@/lib/api'
 
-/**
- * 남의 펫 프로필. 홈 피드에서 작성자를 눌러 들어온다.
- *
- * 백엔드 `GET /pets/{petId}` 는 `myPetQueryService.getMyPet` 이라 내 펫만 준다.
- * 공개 펫 조회 API 가 없으므로 두 경로로 펫을 얻는다.
- *   1) 홈에서 들어온 경우 — router state 로 받은 authorPet (요청 0건)
- *   2) 새로고침·URL 직접 입력 — 셋로그 목록에서 petId 로 찾는다.
- *      GET /setlogs 응답의 authorPet 이 프로필과 같은 모양이라 그대로 쓸 수 있다.
- */
+/** 남의 펫 프로필. 홈 피드·게시판·채팅에서 작성자를 눌러 들어온다. */
 export function PetProfilePage() {
   const { petId = '' } = useParams()
-  const location = useLocation()
-  const fromState = (location.state as { pet?: PetSearchItem } | null)?.pet ?? null
-
   const id = Number(petId)
-  const setlogs = useQuery({
-    queryKey: ['setlogs'],
-    queryFn: listSetlogs,
-    // state 로 받았으면 굳이 부르지 않는다.
-    enabled: fromState === null && Number.isFinite(id),
-    retry: false,
-    staleTime: 60_000,
-  })
+  const valid = Number.isSafeInteger(id) && id > 0
 
-  const found =
-    setlogs.data?.items.find((s) => s.authorPet.petId === id)?.authorPet ?? null
-  const pet = fromState ?? found
+  const profile = useQuery({
+    queryKey: ['pet-public-profile', id],
+    queryFn: () => getPetPublicProfile(id),
+    enabled: valid,
+    retry: false,
+  })
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
       <BackLink to="/" label="홈" />
 
-      {pet === null && setlogs.isPending && (
+      {!valid && (
+        <div className="mt-6">
+          <EmptyState title="존재하지 않는 펫입니다" />
+        </div>
+      )}
+
+      {valid && profile.isPending && (
         <p className="mt-6 text-muted-foreground">불러오는 중…</p>
       )}
 
-      {pet === null && setlogs.isError && (
+      {valid && profile.isError && (
         <div className="mt-6">
           <ApiErrorNotice
-            error={setlogs.error}
+            error={profile.error}
             title="프로필을 불러오지 못했습니다"
-            onRetry={() => void setlogs.refetch()}
+            onRetry={() => void profile.refetch()}
           />
         </div>
       )}
 
-      {pet === null && !setlogs.isPending && !setlogs.isError && (
-        <div className="mt-6">
-          <EmptyState
-            title="프로필을 불러올 수 없습니다"
-            description="이 강아지의 셋로그가 피드에 없습니다. 공개 펫 조회 API 가 열리면 바로 조회됩니다."
-          />
-        </div>
-      )}
-
-      {pet !== null && <Profile pet={pet} key={petId} />}
+      {profile.data && <Profile pet={profile.data} key={petId} />}
     </div>
   )
 }
 
-function Profile({ pet }: { pet: PetSearchItem }) {
+function Profile({ pet }: { pet: PetPublicProfile }) {
   // 서버가 준 relationship 이 시작값이고, 요청을 보내면 낙관적으로 올린다.
   const [relationship, setRelationship] = useState(pet.relationship)
   const [error, setError] = useState<string | null>(null)
@@ -84,15 +66,25 @@ function Profile({ pet }: { pet: PetSearchItem }) {
     onError: (e) => setError(toRequestMessage(e)),
   })
 
+  const age = ageFrom(pet.birthDate)
+
   return (
     <>
       <div className="mt-4 flex items-center gap-4">
-        <div
-          aria-hidden
-          className="grid size-20 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground"
-        >
-          <Dog size={40} />
-        </div>
+        {pet.profileUrl ? (
+          <img
+            src={pet.profileUrl}
+            alt=""
+            className="size-20 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <div
+            aria-hidden
+            className="grid size-20 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground"
+          >
+            <Dog size={40} />
+          </div>
+        )}
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-2xl font-bold">
             <span className="truncate">{pet.nickname}</span>
@@ -105,51 +97,87 @@ function Profile({ pet }: { pet: PetSearchItem }) {
               />
             )}
           </h1>
-          <p className="mt-1 text-[14px] text-muted-foreground">
-            {pet.publicTag}
-          </p>
+          <p className="mt-1 text-[14px] text-muted-foreground">{pet.publicTag}</p>
         </div>
       </div>
 
-      <div className="mt-6">
-        {relationship === 'FRIEND' ? (
-          <p className="rounded-xl border border-border bg-surface p-4 text-center font-medium text-muted-foreground">
-            이미 친구입니다
-          </p>
-        ) : relationship === 'REQUEST_SENT' ? (
-          <p className="rounded-xl border border-border bg-surface p-4 text-center font-medium text-muted-foreground">
-            친구 요청을 보냈습니다. 상대가 수락하면 연결됩니다.
-          </p>
-        ) : relationship === 'REQUEST_RECEIVED' ? (
-          <Link
-            to="/me/friends"
-            className="flex min-h-12 w-full items-center justify-center rounded-lg bg-primary font-semibold text-on-primary transition-colors hover:bg-primary-hover"
-          >
-            받은 요청에서 수락하기
-          </Link>
-        ) : (
-          <button
-            type="button"
-            disabled={request.isPending}
-            onClick={() => request.mutate()}
-            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary font-semibold text-on-primary transition-colors hover:bg-primary-hover disabled:opacity-50"
-          >
-            <UserPlus size={20} weight="bold" />
-            {request.isPending ? '보내는 중…' : '친구 요청'}
-          </button>
-        )}
+      <dl className="mt-5 grid grid-cols-2 gap-3 text-[14px] sm:grid-cols-3">
+        {pet.breedName && <Field label="품종" value={pet.breedName} />}
+        {pet.sizeCode && <Field label="크기" value={SIZE_LABEL[pet.sizeCode]} />}
+        {pet.sex && <Field label="성별" value={SEX_LABEL[pet.sex]} />}
+        {age !== null && <Field label="나이" value={`${age}살`} />}
+      </dl>
 
-        {error && (
-          <p role="alert" className="mt-3 text-[14px] text-destructive">
-            {error}
-          </p>
-        )}
-      </div>
+      {pet.personalityTags.length > 0 && (
+        <ul className="mt-4 flex flex-wrap gap-1.5">
+          {pet.personalityTags.map((tag) => (
+            <li
+              key={tag}
+              className="rounded-full bg-primary-subtle px-3 py-1 text-[13px] font-medium text-primary-strong"
+            >
+              #{tag}
+            </li>
+          ))}
+        </ul>
+      )}
 
-      <p className="mt-4 text-[13px] text-muted-foreground">
-        친구는 양방향 동의입니다. 요청을 보낸 뒤 상대가 수락해야 연결됩니다.
+      {pet.bio && <p className="mt-4 whitespace-pre-wrap text-[14px]">{pet.bio}</p>}
+
+      <p className="mt-4 flex items-center gap-1.5 text-[13px] text-muted-foreground">
+        <HandHeart size={16} />
+        도움이 됐어요 {pet.helpfulReceivedCount}회
       </p>
+
+      {relationship !== null && (
+        <div className="mt-6">
+          {relationship === 'FRIEND' ? (
+            <p className="rounded-xl border border-border bg-surface p-4 text-center font-medium text-muted-foreground">
+              이미 친구입니다
+            </p>
+          ) : relationship === 'REQUEST_SENT' ? (
+            <p className="rounded-xl border border-border bg-surface p-4 text-center font-medium text-muted-foreground">
+              친구 요청을 보냈습니다. 상대가 수락하면 연결됩니다.
+            </p>
+          ) : relationship === 'REQUEST_RECEIVED' ? (
+            <Link
+              to="/me/friends"
+              className="flex min-h-12 w-full items-center justify-center rounded-lg bg-primary font-semibold text-on-primary transition-colors hover:bg-primary-hover"
+            >
+              받은 요청에서 수락하기
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled={request.isPending}
+              onClick={() => request.mutate()}
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-primary font-semibold text-on-primary transition-colors hover:bg-primary-hover disabled:opacity-50"
+            >
+              <UserPlus size={20} weight="bold" />
+              {request.isPending ? '보내는 중…' : '친구 요청'}
+            </button>
+          )}
+
+          {error && (
+            <p role="alert" className="mt-3 text-[14px] text-destructive">
+              {error}
+            </p>
+          )}
+
+          <p className="mt-4 text-[13px] text-muted-foreground">
+            친구는 양방향 동의입니다. 요청을 보낸 뒤 상대가 수락해야 연결됩니다.
+          </p>
+        </div>
+      )}
     </>
+  )
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium">{value}</dd>
+    </div>
   )
 }
 

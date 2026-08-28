@@ -17,8 +17,10 @@ import { OpenChatDetailPage } from '@/routes/OpenChatDetailPage'
 import { OpenChatRoomPage } from '@/routes/OpenChatRoomPage'
 import { PlaceDetailPage } from '@/routes/PlaceDetailPage'
 import { PostDetailPage } from '@/routes/PostDetailPage'
+import { PostEditPage } from '@/routes/PostEditPage'
 import { PostNewPage } from '@/routes/PostNewPage'
 import { SetlogUploadPage } from '@/routes/SetlogUploadPage'
+import { SetlogDetailPage } from '@/routes/SetlogDetailPage'
 import { MePage } from '@/routes/MePage'
 import { PetDetailPage } from '@/routes/PetDetailPage'
 import { PetEditPage } from '@/routes/PetEditPage'
@@ -29,6 +31,9 @@ import { MeetingCardPage } from '@/routes/MeetingCardPage'
 import { MeetingsPage } from '@/routes/MeetingsPage'
 import { BlocksPage } from '@/routes/BlocksPage'
 import { HiddenSetlogsPage } from '@/routes/HiddenSetlogsPage'
+import { FootprintsPage } from '@/routes/FootprintsPage'
+import { MedicalSupportPage } from '@/routes/MedicalSupportPage'
+import { MedicalSupportDetailPage } from '@/routes/MedicalSupportDetailPage'
 import {
   RequireAdmin,
   AdminReportsPage,
@@ -36,6 +41,8 @@ import {
 } from '@/routes/admin/AdminReportsPage'
 import { AdminHomePage } from '@/routes/admin/AdminHomePage'
 import { AdminBoardsPage } from '@/routes/admin/AdminBoardsPage'
+import { AdminSafetyPage, AdminSafetyCaseDetailPage } from '@/routes/admin/AdminSafetyPage'
+import { AdminDashboardPage } from '@/routes/admin/AdminDashboardPage'
 import { FriendsPage } from '@/routes/FriendsPage'
 import { FriendSearchPage } from '@/routes/FriendSearchPage'
 import { PlacesPage } from '@/routes/PlacesPage'
@@ -48,6 +55,8 @@ import {
   FaqPage,
 } from '@/routes/SupportPages'
 import { LoginPage } from '@/routes/LoginPage'
+import { OAuthSuccessPage } from '@/routes/OAuthSuccessPage'
+import { OAuthErrorPage } from '@/routes/OAuthErrorPage'
 import { SignupPage } from '@/routes/SignupPage'
 import { ResetPasswordPage } from '@/routes/ResetPasswordPage'
 import { NotFoundPage } from '@/routes/NotFoundPage'
@@ -93,6 +102,8 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/oauth/success" element={<OAuthSuccessPage />} />
+              <Route path="/oauth/error" element={<OAuthErrorPage />} />
 
               <Route element={<RequireAuth />}>
                 <Route element={<AppShell />}>
@@ -102,6 +113,7 @@ export default function App() {
                   <Route path="board" element={<BoardPage />} />
                   <Route path="board/new" element={<PostNewPage />} />
                   <Route path="board/:postId" element={<PostDetailPage />} />
+                  <Route path="board/:postId/edit" element={<PostEditPage />} />
 
                   {/* 채팅 — /chat/new 는 :roomId 보다 먼저 와야 한다 */}
                   <Route path="chat" element={<ChatPage />} />
@@ -131,6 +143,7 @@ export default function App() {
                   <Route path="map/:placeId" element={<PlaceDetailPage />} />
 
                   <Route path="setlogs/new" element={<SetlogUploadPage />} />
+                  <Route path="setlogs/:setlogId" element={<SetlogDetailPage />} />
 
                   {/* 마이 페이지 — /me/pets/new 는 :petId 보다 먼저 */}
                   <Route path="me" element={<MePage />} />
@@ -146,6 +159,12 @@ export default function App() {
                   <Route path="me/places" element={<PlacesPage />} />
                   <Route path="me/blocks" element={<BlocksPage />} />
                   <Route path="me/hidden-setlogs" element={<HiddenSetlogsPage />} />
+                  <Route path="me/footprints" element={<FootprintsPage />} />
+                  <Route path="me/medical-support" element={<MedicalSupportPage />} />
+                  <Route
+                    path="me/medical-support/:programId"
+                    element={<MedicalSupportDetailPage />}
+                  />
 
                   {/* 약속 카드 — 채팅의 CARD 말풍선에서 진입한다 */}
                   <Route path="meeting-cards/:cardId" element={<MeetingCardPage />} />
@@ -159,6 +178,9 @@ export default function App() {
                       path="admin/reports/:reportId"
                       element={<AdminReportDetailPage />}
                     />
+                    <Route path="admin/safety" element={<AdminSafetyPage />} />
+                    <Route path="admin/safety/:caseId" element={<AdminSafetyCaseDetailPage />} />
+                    <Route path="admin/dashboard" element={<AdminDashboardPage />} />
                   </Route>
 
                   {/* 고객 지원 */}

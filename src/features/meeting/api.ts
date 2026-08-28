@@ -2,8 +2,16 @@ import { apiRequest } from '@/lib/api'
 import type {
   CardDraft,
   CardType,
+  ConfirmationCodeResult,
+  FootprintListResult,
+  IssueConfirmationCodeResult,
   MeetingCard,
   MeetingCardListResult,
+  MeetingReviewSubmitBody,
+  MeetingReviewSubmitResult,
+  MeetingVerificationStatusResult,
+  MeetingVerificationSubmitResult,
+  SubmitMeetingVerificationBody,
 } from './types'
 
 /**
@@ -85,4 +93,74 @@ export function cancelMeetingCard(cardId: number) {
   return apiRequest<MeetingCard>(`/meeting-cards/${cardId}/cancel`, {
     method: 'POST',
   })
+}
+
+/**
+ * 만남 GPS 위치 제출. 같은 `clientRequestId`는 항상 같은 payload로만 보내야 한다
+ * (서버가 clientRequestId+payload를 immutable ledger로 멱등 처리한다).
+ * 네트워크 재시도는 이 함수를 그대로 다시 부르면 되지만, 위치를 새로 잡은
+ * "다른 시도"라면 새 clientRequestId로 새로 호출해야 한다.
+ */
+export function submitMeetingVerification(
+  cardId: number,
+  body: SubmitMeetingVerificationBody,
+) {
+  return apiRequest<MeetingVerificationSubmitResult>(
+    `/meeting-cards/${cardId}/meeting-verifications`,
+    { method: 'POST', body },
+  )
+}
+
+/** 좌표는 내려오지 않는다. 대기 화면 폴링에 쓴다. */
+export function getMeetingVerification(cardId: number) {
+  return apiRequest<MeetingVerificationStatusResult>(
+    `/meeting-cards/${cardId}/meeting-verification`,
+  )
+}
+
+/**
+ * 확인 코드 fallback(#164). CODE_REQUIRED 참여 Pet만 호출 가능. 평문 코드는
+ * 이 응답에서만 온다 — 어디에도 저장하지 말고 화면에 보여주기만 한다.
+ */
+export function issueConfirmationCode(cardId: number) {
+  return apiRequest<IssueConfirmationCodeResult>(
+    `/meeting-cards/${cardId}/confirmation-codes`,
+    { method: 'POST' },
+  )
+}
+
+/** 상대 Pet만 호출 가능(발급자 본인은 403). 성공해도 아직 Meeting 은 생성되지 않는다. */
+export function verifyConfirmationCode(cardId: number, code: string) {
+  return apiRequest<ConfirmationCodeResult>(
+    `/meeting-cards/${cardId}/confirmation-codes/verify`,
+    { method: 'POST', body: { code } },
+  )
+}
+
+/** 코드 발급자만 호출. 상대가 아직 검증하지 않았으면 409 MEETING_CODE_VERIFIER_REQUIRED. */
+export function confirmConfirmationCode(cardId: number) {
+  return apiRequest<ConfirmationCodeResult>(
+    `/meeting-cards/${cardId}/confirmation-codes/confirm`,
+    { method: 'POST' },
+  )
+}
+
+/**
+ * 만남 후기 작성(#166). `meetingId`는 카드 id가 아니라 확정된 Meeting.id다.
+ * 같은 clientRequestId 재요청은 멱등, 같은 (meeting, 내 Pet) 재작성은 409 REVIEW_ALREADY_EXISTS.
+ */
+export function submitMeetingReview(meetingId: number, body: MeetingReviewSubmitBody) {
+  return apiRequest<MeetingReviewSubmitResult>(`/meetings/${meetingId}/reviews`, {
+    method: 'POST',
+    body,
+  })
+}
+
+/** 내 Active Pet 발자국 목록. createdAt DESC 커서 페이지, size 기본 20·최대 100. */
+export function listFootprints(params?: { cursor?: string; size?: number }) {
+  const q = new URLSearchParams()
+  if (params?.cursor) q.set('cursor', params.cursor)
+  if (params?.size) q.set('size', String(params.size))
+  const qs = q.toString()
+  return apiRequest<FootprintListResult>(`/footprints${qs ? `?${qs}` : ''}`)
 }

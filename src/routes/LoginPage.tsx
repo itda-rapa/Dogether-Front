@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { AuthLayout } from '@/components/AuthLayout'
 import { useAuth } from '@/features/auth/auth-context'
 import { toAuthMessage } from '@/features/auth/error-message'
+import { oauthStartUrl } from '@/features/auth/api'
 import { cn } from '@/lib/cn'
 
 const schema = z.object({
@@ -125,6 +126,52 @@ export function LoginPage() {
           비밀번호를 잊으셨나요?
         </Link>
       </form>
+
+      <div className="mt-6 flex items-center gap-3 text-[13px] text-muted-foreground" aria-hidden>
+        <span className="h-px flex-1 bg-border" />
+        또는
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <div className="mt-4 flex flex-col gap-2.5">
+        <a
+          href={oauthStartUrl('GOOGLE')}
+          className="flex min-h-12 items-center justify-center gap-2.5 rounded-2xl border border-border bg-surface font-semibold transition-colors hover:bg-primary-subtle"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+            <path
+              fill="#4285F4"
+              d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"
+            />
+            <path
+              fill="#34A853"
+              d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"
+            />
+            <path
+              fill="#EA4335"
+              d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
+            />
+          </svg>
+          Google로 계속하기
+        </a>
+        {/* 네이버 브랜드 가이드 고정 색상(#03C75A) — 디자인 토큰 대상이 아니다. */}
+        <a
+          href={oauthStartUrl('NAVER')}
+          className="flex min-h-12 items-center justify-center gap-2.5 rounded-2xl bg-[#03C75A] font-semibold text-white transition-opacity hover:opacity-90"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
+            <path
+              fill="currentColor"
+              d="M13.5495 12.3223L8.6249 5H5V19H10.4505V11.6777L15.3751 19H19V5H13.5495V12.3223Z"
+            />
+          </svg>
+          네이버로 계속하기
+        </a>
+      </div>
 
       <p className="mt-6 text-center text-[14px] text-muted-foreground">
         계정이 없으신가요?{' '}

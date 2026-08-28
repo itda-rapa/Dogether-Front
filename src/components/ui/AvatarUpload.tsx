@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { Camera, Spinner } from '@phosphor-icons/react'
+import { Camera, Spinner, X } from '@phosphor-icons/react'
 import { getMediaType, MediaUploadError, uploadMedia } from '@/features/media/api'
 import type { MediaUploadResult } from '@/features/media/types'
 import { ApiError, NetworkError } from '@/lib/api'
@@ -11,6 +11,8 @@ type Props = {
   size: number
   fallback: ReactNode
   onUploaded: (result: MediaUploadResult) => Promise<void> | void
+  /** 있으면 사진이 설정돼 있을 때 삭제 배지를 보여준다. 생략하면 삭제 UI 자체가 없다. */
+  onRemove?: () => Promise<void> | void
   className?: string
 }
 
@@ -27,11 +29,25 @@ export function AvatarUpload({
   size,
   fallback,
   onUploaded,
+  onRemove,
   className,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const onClickRemove = async () => {
+    if (!onRemove) return
+    setError(null)
+    setBusy(true)
+    try {
+      await onRemove()
+    } catch (e) {
+      setError(toMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const onChange = async (file: File | undefined) => {
     if (!file) return
@@ -88,6 +104,18 @@ export function AvatarUpload({
         className="sr-only"
         onChange={(e) => void onChange(e.target.files?.[0])}
       />
+
+      {onRemove && src && (
+        <button
+          type="button"
+          aria-label="프로필 사진 삭제"
+          onClick={() => void onClickRemove()}
+          disabled={busy}
+          className="absolute -right-0.5 -top-0.5 grid size-6 place-items-center rounded-full border-2 border-surface bg-destructive text-on-primary transition-opacity disabled:opacity-60"
+        >
+          <X size={12} weight="bold" />
+        </button>
+      )}
 
       {error && (
         <p

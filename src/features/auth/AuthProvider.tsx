@@ -131,6 +131,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [persist, queryClient],
   )
 
+  const signInWithTokens = useCallback(
+    (tokens: AuthTokens) => {
+      persist(tokens)
+      setHasSession(true)
+      void queryClient.invalidateQueries({ queryKey: ['me'] })
+    },
+    [persist, queryClient],
+  )
+
   const signOut = useCallback(async () => {
     try {
       await authApi.logout()
@@ -151,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refetchMe: () => void meQuery.refetch(),
         signIn,
         signUp,
+        signInWithTokens,
         signOut,
       }}
     >

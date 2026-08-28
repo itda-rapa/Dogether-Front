@@ -14,6 +14,7 @@ const SETLOG_CONTENT_TYPES = ['video/mp4', 'video/webm']
 const MIN_SETLOG_DURATION_SECONDS = 3
 const MAX_SETLOG_DURATION_SECONDS = 5
 const DURATION_PROBE_TIMEOUT_MS = 8000
+export const MAX_SETLOG_CAPTION_LENGTH = 500
 
 export class SetlogUploadError extends Error {
   constructor(message: string) {
@@ -25,6 +26,15 @@ export class SetlogUploadError extends Error {
 /** M1 은 모든 사용자에게 동일한 시드 영상 3개를 준다. 커서 페이지네이션 응답이다. */
 export function listSetlogs() {
   return apiRequest<SetlogListResult>('/setlogs')
+}
+
+/**
+ * 단건 상세 조회. 채팅에 공유된 SETLOG_SHARE 카드의 `detailPath`가 여기로 연결된다.
+ * 카드 표시 뒤 삭제·비공개·차단이 발생해도 조회 시점 권한을 다시 검증하며,
+ * 과거 Media URL 을 재사용하지 않고 매번 새로 서명한다. 접근 불가는 404 로 숨긴다.
+ */
+export function getSetlog(setlogId: number) {
+  return apiRequest<Setlog>(`/setlogs/${setlogId}`)
 }
 
 /** 동일 반응을 다시 추가해도 서버가 멱등 처리한다. */
@@ -65,10 +75,14 @@ export function createSetlogUploadSession(body: {
   })
 }
 
-export function completeSetlogUpload(uploadId: string, clientRequestId: string) {
+export function completeSetlogUpload(
+  uploadId: string,
+  clientRequestId: string,
+  caption: string | null,
+) {
   return apiRequest<Setlog>(`/setlogs/uploads/${uploadId}/complete`, {
     method: 'POST',
-    body: { clientRequestId },
+    body: { clientRequestId, caption },
   })
 }
 
@@ -137,6 +151,20 @@ export async function getSetlogVideoDurationError(file: File): Promise<string | 
   return null
 }
 
+/** 서버와 동일하게 trim 기준으로 길이를 검사한다. */
+export function getSetlogCaptionError(caption: string): string | null {
+  if (caption.trim().length > MAX_SETLOG_CAPTION_LENGTH) {
+    return `캡션은 ${MAX_SETLOG_CAPTION_LENGTH}자 이하로 입력해 주세요.`
+  }
+  return null
+}
+
+/** trim 후 빈 문자열이면 null 로 보낸다. 서버의 정규화 규칙과 맞춘다. */
+function normalizeCaption(caption: string): string | null {
+  const trimmed = caption.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
 /**
  * 셋로그 영상 업로드: 세션 생성 → presigned PUT → 완료 신고.
  *
@@ -147,6 +175,7 @@ export async function getSetlogVideoDurationError(file: File): Promise<string | 
 export async function uploadSetlogVideo(
   petId: number,
   file: File,
+  caption: string,
   onProgress?: (progress: SetlogUploadProgress) => void,
 ): Promise<Setlog> {
   const validationError = getSetlogVideoError(file)
@@ -154,6 +183,9 @@ export async function uploadSetlogVideo(
 
   const durationError = await getSetlogVideoDurationError(file)
   if (durationError) throw new SetlogUploadError(durationError)
+
+  const captionError = getSetlogCaptionError(caption)
+  if (captionError) throw new SetlogUploadError(captionError)
 
   onProgress?.({ stage: 'initializing', uploadedBytes: 0, totalBytes: file.size })
 
@@ -168,7 +200,7 @@ export async function uploadSetlogVideo(
   onProgress?.({ stage: 'uploading', uploadedBytes: file.size, totalBytes: file.size })
 
   onProgress?.({ stage: 'completing', uploadedBytes: file.size, totalBytes: file.size })
-  return completeSetlogUpload(session.uploadId, crypto.randomUUID())
+  return completeSetlogUpload(session.uploadId, crypto.randomUUID(), normalizeCaption(caption))
 }
 
 async function putToStorage(url: string, file: File, headers: Record<string, string>) {

@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { Me } from './types'
+import type { AuthTokens, Me } from './types'
 
 export type AuthContextValue = {
   /** 저장된 토큰 복원이 끝나기 전 true. 이 동안 라우팅 판단을 미룬다. */
@@ -24,6 +24,8 @@ export type AuthContextValue = {
     neighborhoodCode: string
     verificationToken: string
   }) => Promise<void>
+  /** OAuth exchange/signup 이 이미 발급한 토큰을 세션에 적용한다. */
+  signInWithTokens: (tokens: AuthTokens) => void
   signOut: () => Promise<void>
 }
 

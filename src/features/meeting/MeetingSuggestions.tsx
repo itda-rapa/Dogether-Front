@@ -18,6 +18,8 @@ import { splitDraftDateTime, type CardDraft } from './types'
  * - 한 번 동의하면 그 방에서는 다시 묻지 않는다. 이후 내가 보내기를 눌러
  *   메시지 전송에 성공할 때마다 자동 재조회한다 (상대 메시지 도착이나 폴링
  *   자체는 트리거가 아니다 — 실시간으로 대화를 감시하지 않는다)
+ * - X 를 누르면 이 브라우저에서 제안을 아예 끈다. 다시 켜는 곳은 채팅방 상단의
+ *   "약속 제안 켜기" 다 — 서버·상대방에는 아무 영향이 없다 (suggestionPref)
  * - fallback=true(대화 부족·AI 실패)면 아무것도 띄우지 않는다. 상단 버튼이 그 경우를 담당한다
  * - 눌러도 바로 확정하지 않는다. 확인 화면으로 보낸다
  */
@@ -26,6 +28,7 @@ export function MeetingSuggestions({
   enabled,
   sourceVersion,
   typing,
+  onTurnOff,
 }: {
   roomId: number
   enabled: boolean
@@ -33,9 +36,9 @@ export function MeetingSuggestions({
   sourceVersion: number
   /** 사용자가 입력창에 뭔가 치고 있는지. true가 되면 별도 닫기 없이 스트립을 숨긴다. */
   typing: boolean
+  /** X 를 눌렀을 때. 부모가 이 브라우저에 "끔"을 저장하고 enabled 를 내린다. */
+  onTurnOff: () => void
 }) {
-  /** X 버튼으로 영구히 닫았는지. 타이핑 중 숨김과는 별개 — 되돌아올 수 있어야 한다. */
-  const [dismissed, setDismissed] = useState(false)
   /** "약속을 잡아볼까요?" 에 동의했는지. 이게 true 여야 AI 를 실제로 부른다. */
   const [confirmed, setConfirmed] = useState(false)
   const lastRequestedSourceVersion = useRef<number | null>(null)
@@ -44,7 +47,7 @@ export function MeetingSuggestions({
     // 확인 화면과 같은 키를 쓴다. 카드를 눌러 이동하면 재호출 없이 즉시 뜬다.
     queryKey: ['card-draft', String(roomId)],
     queryFn: () => createCardDraft(roomId),
-    enabled: enabled && confirmed && !dismissed,
+    enabled: enabled && confirmed,
     retry: false,
     staleTime: Infinity,
     refetchOnMount: false,
@@ -52,7 +55,7 @@ export function MeetingSuggestions({
   const refetchDraft = draft.refetch
 
   useEffect(() => {
-    if (!enabled || !confirmed || dismissed) return
+    if (!enabled || !confirmed) return
 
     // enabled가 처음 true가 된 렌더에서는 useQuery가 이미 요청한다.
     if (lastRequestedSourceVersion.current === null) {
@@ -64,17 +67,17 @@ export function MeetingSuggestions({
 
     lastRequestedSourceVersion.current = sourceVersion
     void refetchDraft()
-  }, [confirmed, dismissed, enabled, refetchDraft, sourceVersion])
+  }, [confirmed, enabled, refetchDraft, sourceVersion])
 
   // 타이핑 중엔 입력창을 가리지 않게 잠깐 숨긴다 — X 로 닫은 것과 달리, 타이핑을
   // 멈추면 (조건이 여전히 맞으면) 다시 뜬다.
-  if (!enabled || dismissed || typing) return null
+  if (!enabled || typing) return null
 
   // 아직 동의 전이다 — AI 를 부르기 전에 먼저 묻는다.
   // 문구 자체가 버튼이다. 무시하려면 그냥 채팅을 치면 된다(위 useEffect).
   if (!confirmed) {
     return (
-      <Strip onDismiss={() => setDismissed(true)}>
+      <Strip onDismiss={onTurnOff}>
         <button
           type="button"
           onClick={() => setConfirmed(true)}
@@ -91,7 +94,7 @@ export function MeetingSuggestions({
 
   if (draft.isPending) {
     return (
-      <Strip onDismiss={() => setDismissed(true)}>
+      <Strip onDismiss={onTurnOff}>
         <div className="h-11 w-44 shrink-0 animate-pulse rounded-full bg-muted" />
       </Strip>
     )
@@ -109,7 +112,7 @@ export function MeetingSuggestions({
   if (suggestions.length === 0) return null
 
   return (
-    <Strip onDismiss={() => setDismissed(true)}>
+    <Strip onDismiss={onTurnOff}>
       {suggestions.map((s) => (
         <Link
           key={s.draftId}
@@ -151,7 +154,7 @@ function Strip({
         </p>
         <button
           type="button"
-          aria-label="약속 제안 닫기"
+          aria-label="약속 제안 그만 받기"
           onClick={onDismiss}
           className="ml-auto grid size-11 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-primary-subtle"
         >

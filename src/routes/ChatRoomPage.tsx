@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   ArrowLeft,
   CalendarPlus,
+  FilmSlate,
+  Image as ImageIcon,
+  MapPin,
   PaperPlaneRight,
   SealCheck,
+  ShareFat,
+  Sparkle,
   WarningCircle,
 } from '@phosphor-icons/react'
 import {
@@ -23,17 +28,23 @@ import {
   type ChatMessage,
 } from '@/features/chat/types'
 import {
-  detectMedicalPlaceKeyword,
-  isPlaceSuggestionSuppressed,
+  detectPlaceKeyword,
   keywordFromPlaceType,
-  suppressPlaceSuggestion,
+  placeConsentStorageKey,
   placeTypeFromKeyword,
 } from '@/features/chat/placeSuggestion'
-import { PlaceSuggestionPopup } from '@/features/chat/PlaceSuggestionPopup'
+import { InlineFacilityMap } from '@/features/chat/InlineFacilityMap'
+import { SharedFacilityMapMessage } from '@/features/chat/SharedFacilityMapMessage'
+import { ShareSetlogPicker } from '@/features/chat/ShareSetlogPicker'
 import { ModerationMenu } from '@/components/ModerationMenu'
 import { MeetingSuggestions } from '@/features/meeting/MeetingSuggestions'
+import {
+  isMeetingSuggestionOff,
+  setMeetingSuggestionOff,
+} from '@/features/meeting/suggestionPref'
 import { useAuth } from '@/features/auth/auth-context'
-import { ApiError } from '@/lib/api'
+import { MediaUploadError, getMediaType, uploadMedia } from '@/features/media/api'
+import { ApiError, NetworkError } from '@/lib/api'
 import { cn } from '@/lib/cn'
 
 /** 메시지 폴링 주기. 방 목록보다 촘촘하게 둔다. */
@@ -48,10 +59,24 @@ export function ChatRoomPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [draft, setDraft] = useState('')
   const [sendError, setSendError] = useState<string | null>(null)
-  /** 팝업을 닫은 메시지 id. 폴링이 같은 메시지를 다시 실어와도 다시 뜨지 않게 한다. */
+  /** 동의를 거절한 메시지 id. 폴링이 같은 메시지를 다시 실어와도 다시 뜨지 않게 한다. */
   const [dismissedPlaceMessageId, setDismissedPlaceMessageId] = useState<
     number | null
   >(null)
+  /** "지도 공유할까요?" 동의를 받은 뒤 실제 지도를 펼쳐도 된다고 승인한 메시지 id. */
+  const [approvedPlaceMessageId, setApprovedPlaceMessageId] = useState<number | null>(null)
+  /** 장소 키워드가 감지돼 동의 흐름이 걸린 메시지. 오픈챗과 같은 패턴(placeConsentStorageKey). */
+  const [placeConsentMessage, setPlaceConsentMessage] = useState<ChatMessage | null>(null)
+  /*
+    AI 약속 제안을 이 브라우저에서 껐는지. localStorage 는 반응형이 아니라 여기서
+    들고 있어야 상단 "약속 제안 켜기" 와 입력창 위 스트립이 같이 움직인다.
+  */
+  const [suggestionOff, setSuggestionOff] = useState(false)
+
+  // me 는 처음 렌더에 null 일 수 있어서 초기값이 아니라 효과에서 읽는다.
+  useEffect(() => {
+    setSuggestionOff(me ? isMeetingSuggestionOff(me.userId) : false)
+  }, [me])
 
   /** 다음 폴링에 넘길 커서. 렌더와 무관하게 즉시 읽혀야 해서 ref 로 둔다. */
   const afterRef = useRef<number | null>(null)
@@ -141,6 +166,46 @@ export function ChatRoomPage() {
     onError: (e) => setSendError(toSendMessage(e)),
   })
 
+  /*
+    IMAGE/VIDEO/SETLOG_SHARE 는 WS 계약(06_M2_WebSocket_계약.md)에 없는 신규
+    타입이라 REST 로만 보낸다 — TEXT 처럼 WS 우선·REST fallback 이중 경로를
+    만들 필요가 없다. 실패하면 그대로 오류를 보여준다(재시도는 사용자가 다시
+    누른다).
+  */
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const sendImage = useMutation({
+    mutationFn: async (file: File) => {
+      const mediaType = getMediaType(file)
+      const uploaded = await uploadMedia(file)
+      return sendChatMessage(roomIdNum, {
+        clientMessageId: crypto.randomUUID(),
+        type: mediaType,
+        mediaId: uploaded.media.id,
+      })
+    },
+    onSuccess: (message) => {
+      setMessages((prev) => mergeMessages(prev, [message]))
+      if (message.messageId > (afterRef.current ?? 0)) afterRef.current = message.messageId
+    },
+    onError: (e) => setSendError(toImageSendMessage(e)),
+  })
+
+  const [shareOpen, setShareOpen] = useState(false)
+  const shareSetlog = useMutation({
+    mutationFn: (setlogId: number) =>
+      sendChatMessage(roomIdNum, {
+        clientMessageId: crypto.randomUUID(),
+        type: 'SETLOG_SHARE',
+        setlogId,
+      }),
+    onSuccess: (message) => {
+      setMessages((prev) => mergeMessages(prev, [message]))
+      if (message.messageId > (afterRef.current ?? 0)) afterRef.current = message.messageId
+      setShareOpen(false)
+    },
+    onError: () => setSendError('셋로그를 공유하지 못했습니다.'),
+  })
+
   // 카드가 이미 만들어진 대화는 다시 초안 후보로 삼지 않는다. 그렇지 않으면 카드
   // 확정 -> 방으로 복귀 -> 확정 직전 TEXT가 다시 "최근 대화"로 잡혀 방금 만든
   // 카드와 같은 내용의 제안이 다시 뜬다 (오픈채팅과 같은 계열의 버그).
@@ -155,39 +220,124 @@ export function ChatRoomPage() {
   )
   // 방금 내가 보낸 마지막 메시지에서만 판단한다. 상대가 답장하면 사라진다.
   const lastMessage = messages[messages.length - 1]
-  const counterpartPetId = room.data?.counterpartPet.petId
-  const placeKeyword =
-    lastMessage &&
-    lastMessage.type === 'TEXT' &&
-    lastMessage.senderType === 'PET' &&
-    lastMessage.senderPetId !== counterpartPetId &&
-    lastMessage.body
-      ? detectMedicalPlaceKeyword(lastMessage.body)
-      : null
-  const placeCategory = placeKeyword ? placeTypeFromKeyword(placeKeyword) : null
 
+  /*
+    WS 로 보내면 send.onSuccess 엔 messageId 만 오고(위 clientMessageIdRef 주석
+    참고) 본문은 나중에 mergeMessages 로 채워지므로, onSuccess 콜백이 아니라
+    messages 배열을 보고 반응한다. 오픈챗은 onSuccess 에서 바로 걸지만 여기선
+    그게 안 통한다.
+  */
+  useEffect(() => {
+    if (!lastMessage || me?.activePetId == null) return
+    if (lastMessage.type !== 'TEXT') return
+    if (lastMessage.senderPetId !== me.activePetId) return
+    if (lastMessage.messageId === placeConsentMessage?.messageId) return
+    /*
+      dismiss 는 placeConsentMessage 를 null 로 되돌리는데 lastMessage 자체는
+      그대로다. 이 가드가 없으면 위 messageId 비교가 (X !== null) 로 다시
+      true 가 돼서 "공유 안 함"을 누른 바로 다음 렌더에 같은 메시지로 동의
+      카드가 즉시 되살아난다.
+    */
+    if (lastMessage.messageId === dismissedPlaceMessageId) return
+    if (detectPlaceKeyword(lastMessage.body ?? '') == null) return
+    setPlaceConsentMessage(lastMessage)
+    setDismissedPlaceMessageId(null)
+    setApprovedPlaceMessageId(null)
+    sessionStorage.setItem(
+      placeConsentStorageKey(roomIdNum, me.activePetId),
+      String(lastMessage.messageId),
+    )
+  }, [
+    lastMessage,
+    me?.activePetId,
+    placeConsentMessage?.messageId,
+    dismissedPlaceMessageId,
+    roomIdNum,
+  ])
+
+  // 새로고침 대비 — 세션에 남아있던 동의 대상 메시지를 복원한다.
+  useEffect(() => {
+    if (me?.activePetId == null || placeConsentMessage != null) return
+    const storedMessageId = Number(
+      sessionStorage.getItem(placeConsentStorageKey(roomIdNum, me.activePetId)),
+    )
+    if (!Number.isInteger(storedMessageId) || storedMessageId <= 0) return
+    const storedMessage = messages.find(
+      (message) =>
+        message.messageId === storedMessageId &&
+        message.type === 'TEXT' &&
+        message.senderPetId === me.activePetId &&
+        detectPlaceKeyword(message.body ?? '') != null,
+    )
+    if (storedMessage) setPlaceConsentMessage(storedMessage)
+  }, [me?.activePetId, messages, placeConsentMessage, roomIdNum])
+
+  const detectedPlaceKeyword =
+    placeConsentMessage?.type === 'TEXT' &&
+    placeConsentMessage.senderType === 'PET' &&
+    placeConsentMessage.senderPetId === me?.activePetId &&
+    placeConsentMessage.body
+      ? detectPlaceKeyword(placeConsentMessage.body)
+      : null
+  const detectedFacilityCategory = detectedPlaceKeyword
+    ? placeTypeFromKeyword(detectedPlaceKeyword)
+    : null
   const shouldRequestPlaceIntent =
-    placeKeyword != null &&
-    lastMessage.messageId !== dismissedPlaceMessageId &&
+    detectedPlaceKeyword != null &&
+    placeConsentMessage != null &&
+    placeConsentMessage.messageId !== dismissedPlaceMessageId &&
     me != null &&
-    placeCategory != null &&
-    !isPlaceSuggestionSuppressed(roomIdNum, me.userId, placeCategory)
+    detectedFacilityCategory != null
 
   const placeIntent = useQuery({
-    queryKey: ['chat', 'place-intent', roomIdNum, lastMessage?.messageId],
-    queryFn: () => decidePlaceIntent(roomIdNum, lastMessage!.messageId),
-    enabled: shouldRequestPlaceIntent,
+    queryKey: ['chat', 'place-intent', roomIdNum, placeConsentMessage?.messageId],
+    queryFn: () => decidePlaceIntent(roomIdNum, placeConsentMessage!.messageId),
+    enabled: valid && room.isSuccess && shouldRequestPlaceIntent,
     retry: false,
     staleTime: Infinity,
   })
   const confirmedPlaceKeyword = placeIntent.data?.decision === 'SHOW'
     ? keywordFromPlaceType(placeIntent.data.placeType)
     : null
-  const showPlacePopup = confirmedPlaceKeyword != null && shouldRequestPlaceIntent
+  const confirmedFacilityCategory = placeIntent.data?.decision === 'SHOW'
+    ? placeIntent.data.placeType
+    : null
+  const showFacilityConsent =
+    confirmedPlaceKeyword != null &&
+    confirmedFacilityCategory != null &&
+    shouldRequestPlaceIntent &&
+    placeConsentMessage?.senderPetId === me?.activePetId &&
+    approvedPlaceMessageId !== placeConsentMessage?.messageId
+  const showFacilityMap =
+    confirmedPlaceKeyword != null &&
+    confirmedFacilityCategory != null &&
+    shouldRequestPlaceIntent &&
+    placeConsentMessage?.senderPetId === me?.activePetId &&
+    approvedPlaceMessageId === placeConsentMessage?.messageId
 
-  const dismissPlacePopup = () => {
-    if (lastMessage) setDismissedPlaceMessageId(lastMessage.messageId)
-    if (me && placeCategory) suppressPlaceSuggestion(roomIdNum, me.userId, placeCategory)
+  const dismissFacilityMap = () => {
+    if (placeConsentMessage) setDismissedPlaceMessageId(placeConsentMessage.messageId)
+    if (me?.activePetId != null) {
+      sessionStorage.removeItem(placeConsentStorageKey(roomIdNum, me.activePetId))
+    }
+    setPlaceConsentMessage(null)
+  }
+  const applySharedMapMessage = useCallback(
+    (message: ChatMessage) => {
+      setMessages((prev) => mergeMessages(prev, [message]))
+      if (message.messageId > (afterRef.current ?? 0)) afterRef.current = message.messageId
+      if (me?.activePetId != null) {
+        sessionStorage.removeItem(placeConsentStorageKey(roomIdNum, me.activePetId))
+      }
+      setPlaceConsentMessage(null)
+      setApprovedPlaceMessageId(null)
+    },
+    [me?.activePetId, roomIdNum],
+  )
+
+  const setSuggestionsEnabled = (on: boolean) => {
+    if (me) setMeetingSuggestionOff(me.userId, !on)
+    setSuggestionOff(!on)
   }
 
   if (!valid) return <Centered>잘못된 채팅방입니다.</Centered>
@@ -244,15 +394,28 @@ export function ChatRoomPage() {
         상단 "약속 잡기"는 AI 제안이 안 뜰 때를 위한 대비책이다.
         주 진입점은 입력창 위 제안 스트립이므로 여기서는 작게 둔다.
       */}
-      <div className="flex justify-end border-b border-border px-3 py-1.5">
+      <div className="flex items-center justify-end gap-1 border-b border-border px-3 py-1.5">
         {canDraft ? (
-          <Link
-            to={`/chat/${roomId}/meeting/new`}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-[14px] font-medium text-primary-strong transition-colors hover:bg-primary-subtle"
-          >
-            <CalendarPlus size={17} weight="bold" />
-            약속 잡기
-          </Link>
+          <>
+            {/* 제안을 꺼둔 동안에만 뜨는 되돌리기. 켜져 있으면 X 가 끄는 쪽을 맡는다. */}
+            {suggestionOff && (
+              <button
+                type="button"
+                onClick={() => setSuggestionsEnabled(true)}
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-primary-subtle hover:text-primary-strong"
+              >
+                <Sparkle size={15} weight="fill" aria-hidden />
+                약속 제안 켜기
+              </button>
+            )}
+            <Link
+              to={`/chat/${roomId}/meeting/new`}
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-[14px] font-medium text-primary-strong transition-colors hover:bg-primary-subtle"
+            >
+              <CalendarPlus size={17} weight="bold" />
+              약속 잡기
+            </Link>
+          </>
         ) : (
           <span className="inline-flex min-h-11 items-center px-2 text-[13px] text-muted-foreground">
             대화를 2번 이상 나누면 약속을 잡을 수 있어요
@@ -270,25 +433,59 @@ export function ChatRoomPage() {
         {messages.map((m) => (
           <li key={m.messageId}>
             <MessageRow message={m} counterpartPetId={data.counterpartPet.petId} />
+            {showFacilityConsent && m.messageId === placeConsentMessage?.messageId && confirmedPlaceKeyword && (
+              <section
+                className="mt-2 rounded-2xl border border-primary/30 bg-surface p-3 shadow-sm"
+                aria-label="지도 공유 확인"
+              >
+                <p className="flex items-center gap-2 font-semibold">
+                  <MapPin size={19} weight="fill" className="text-primary-strong" />
+                  주변 {confirmedPlaceKeyword} 지도를 채팅방에 공유할까요?
+                </p>
+                <p className="mt-1 text-[13px] text-muted-foreground">
+                  승인하면 현재 위치를 확인한 뒤 가까운 시설 5곳을 메시지로 공유합니다.
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={dismissFacilityMap}
+                    className="min-h-11 rounded-lg border border-border font-semibold hover:bg-muted"
+                  >
+                    공유 안 함
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setApprovedPlaceMessageId(m.messageId)}
+                    className="min-h-11 rounded-lg bg-primary font-semibold text-on-primary hover:bg-primary-hover"
+                  >
+                    지도 공유
+                  </button>
+                </div>
+              </section>
+            )}
+            {showFacilityMap && m.messageId === placeConsentMessage?.messageId && confirmedPlaceKeyword && confirmedFacilityCategory && (
+              <InlineFacilityMap
+                roomId={roomIdNum}
+                triggerMessageId={m.messageId}
+                keyword={confirmedPlaceKeyword}
+                category={confirmedFacilityCategory}
+                onDismiss={dismissFacilityMap}
+                onShared={applySharedMapMessage}
+              />
+            )}
           </li>
         ))}
         <div ref={bottomRef} />
       </ul>
 
       <div className="sticky bottom-0 border-t border-border bg-surface">
-        {showPlacePopup && confirmedPlaceKeyword && (
-          <PlaceSuggestionPopup
-            keyword={confirmedPlaceKeyword}
-            onDismiss={dismissPlacePopup}
-          />
-        )}
-
         {/* AI 약속 제안. 입력창 바로 위, 가로 스크롤. 닫을 수 있다. */}
         <MeetingSuggestions
           roomId={roomIdNum}
-          enabled={canDraft && !blocked}
+          enabled={canDraft && !blocked && !suggestionOff}
           sourceVersion={draftSourceVersion}
           typing={draft !== ''}
+          onTurnOff={() => setSuggestionsEnabled(false)}
         />
 
         <div className="p-3">
@@ -312,6 +509,35 @@ export function ChatRoomPage() {
             send.mutate(body)
           }}
         >
+          <button
+            type="button"
+            aria-label="사진 보내기"
+            disabled={blocked || sendImage.isPending}
+            onClick={() => imageInputRef.current?.click()}
+            className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-primary-subtle disabled:opacity-50"
+          >
+            <ImageIcon size={22} />
+          </button>
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/jpeg,video/mp4"
+            className="sr-only"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (file) sendImage.mutate(file)
+            }}
+          />
+          <button
+            type="button"
+            aria-label="셋로그 공유"
+            disabled={blocked}
+            onClick={() => setShareOpen(true)}
+            className="grid size-11 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-primary-subtle disabled:opacity-50"
+          >
+            <ShareFat size={22} />
+          </button>
           <input
             type="text"
             aria-label="메시지 입력"
@@ -333,6 +559,14 @@ export function ChatRoomPage() {
         </form>
         </div>
       </div>
+
+      {shareOpen && (
+        <ShareSetlogPicker
+          onPick={(setlogId) => shareSetlog.mutate(setlogId)}
+          onClose={() => setShareOpen(false)}
+          pending={shareSetlog.isPending}
+        />
+      )}
     </div>
   )
 }
@@ -344,6 +578,15 @@ function MessageRow({
   message: ChatMessage
   counterpartPetId: number
 }) {
+  /*
+    폴링은 messageId 커서 이후 메시지만 받아오므로(mergeMessages 는 이미 목록에
+    있는 메시지를 절대 다시 갱신하지 않는다), 한 번 표시된 IMAGE/VIDEO/
+    SETLOG_SHARE 의 presigned URL 은 만료돼도 다시 새로 받아올 방법이 없다.
+    방을 오래 열어두면 만료돼 깨진 이미지 아이콘만 남으므로, 로드 실패를 감지해
+    "만료됨" 문구로 바꿔 최소한 사용자가 원인을 알 수 있게 한다.
+  */
+  const [mediaFailed, setMediaFailed] = useState(false)
+
   if (message.senderType === 'SYSTEM' || message.type === 'SYSTEM') {
     return (
       <p className="mx-auto w-fit rounded-full bg-muted px-3 py-1 text-[13px] text-muted-foreground">
@@ -385,6 +628,108 @@ function MessageRow({
           <div className="max-w-[75%] rounded-2xl border-2 border-primary bg-surface px-4 py-3">
             {inner}
           </div>
+        )}
+      </div>
+    )
+  }
+
+  if (message.type === 'IMAGE' || message.type === 'VIDEO') {
+    const attachment = message.attachment
+    return (
+      <div className={cn('flex flex-col gap-1', mine ? 'items-end' : 'items-start')}>
+        {attachment && !mediaFailed ? (
+          message.type === 'IMAGE' ? (
+            <img
+              src={attachment.url}
+              alt="채팅 첨부 이미지"
+              onError={() => setMediaFailed(true)}
+              className="max-h-72 max-w-[75%] rounded-2xl object-cover"
+            />
+          ) : (
+            <video
+              src={attachment.url}
+              controls
+              playsInline
+              onError={() => setMediaFailed(true)}
+              className="max-h-72 max-w-[75%] rounded-2xl"
+            />
+          )
+        ) : (
+          <p className="rounded-2xl border border-border bg-surface px-4 py-2.5 text-[14px] text-muted-foreground">
+            <FilmSlate size={16} className="mr-1 inline" />
+            {attachment ? '만료된 첨부입니다. 새로고침해 보세요.' : '더 이상 볼 수 없는 첨부입니다'}
+          </p>
+        )}
+        <span className="text-[13px] tabular-nums text-muted-foreground">
+          {formatTime(message.createdAt)}
+        </span>
+      </div>
+    )
+  }
+
+  if (message.type === 'MAP' && message.map) {
+    return (
+      <div className={cn('flex flex-col gap-1', mine ? 'items-end' : 'items-start')}>
+        <SharedFacilityMapMessage
+          map={message.map}
+          roomId={message.roomId}
+          messageId={message.messageId}
+          senderNickname={message.senderPetNickname}
+          allowPlaceDraft={false}
+        />
+        <span className="text-[13px] tabular-nums text-muted-foreground">
+          {formatTime(message.createdAt)}
+        </span>
+      </div>
+    )
+  }
+
+  if (message.type === 'SETLOG_SHARE') {
+    const shared = message.sharedSetlog
+    const inner =
+      shared && shared.available ? (
+        <>
+          {shared.media && !mediaFailed && (
+            <div className="aspect-square w-full overflow-hidden rounded-lg bg-black">
+              {shared.media.mediaType === 'IMAGE' ? (
+                <img
+                  src={shared.media.url}
+                  alt=""
+                  onError={() => setMediaFailed(true)}
+                  className="size-full object-cover"
+                />
+              ) : (
+                <video
+                  src={shared.media.url}
+                  muted
+                  loop
+                  playsInline
+                  onError={() => setMediaFailed(true)}
+                  className="size-full object-cover"
+                />
+              )}
+            </div>
+          )}
+          <p className="mt-2 font-semibold">{shared.authorPetNickname}의 셋로그</p>
+          {shared.caption && (
+            <p className="mt-0.5 line-clamp-2 text-[13px] text-muted-foreground">{shared.caption}</p>
+          )}
+        </>
+      ) : (
+        <p className="text-[14px] text-muted-foreground">더 이상 볼 수 없는 셋로그입니다</p>
+      )
+
+    return (
+      <div className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
+        {shared?.detailPath ? (
+          <Link
+            to={shared.detailPath}
+            className="w-48 max-w-[75%] rounded-2xl border border-border bg-surface p-3 transition-colors hover:bg-primary-subtle"
+          >
+            {inner}
+          </Link>
+        ) : (
+          <div className="w-48 max-w-[75%] rounded-2xl border border-border bg-surface p-3">{inner}</div>
         )}
       </div>
     )
@@ -481,4 +826,12 @@ function toSendMessage(e: unknown): string {
     default:
       return '메시지를 보내지 못했습니다. 잠시 후 다시 시도해 주세요.'
   }
+}
+
+function toImageSendMessage(e: unknown): string {
+  if (e instanceof MediaUploadError || e instanceof NetworkError) return e.message
+  if (e instanceof ApiError && e.code === 'CHAT_MEDIA_ALREADY_ATTACHED') {
+    return '이미 다른 메시지에 사용된 사진입니다.'
+  }
+  return toSendMessage(e)
 }

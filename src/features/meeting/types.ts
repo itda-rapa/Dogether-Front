@@ -161,3 +161,126 @@ export const FALLBACK_MESSAGE: Record<
     body: '약속 내용을 직접 입력해 주세요.',
   },
 }
+
+/**
+ * 만남 GPS 확인(#148). 계약 원본: dogether(백엔드)/docs/spec/M3/04_M3_API_상세명세.md
+ * `POST/GET /meeting-cards/{cardId}/meeting-verification(s)`.
+ */
+export type MeetingVerificationApiStatus =
+  | 'NOT_SUBMITTED'
+  | 'WAITING_COUNTERPART'
+  | 'GPS_CONFIRMED'
+  | 'CODE_REQUIRED'
+  | 'CODE_CONFIRMED'
+  | 'REJECTED'
+  | 'EXPIRED'
+
+export type SubmitMeetingVerificationBody = {
+  clientRequestId: string
+  latitude: number
+  longitude: number
+  accuracyMeters: number
+  /** ISO date-time. 위치를 실제로 획득한 시각(제출 시각이 아니다). */
+  capturedAt: string
+}
+
+/** POST 응답. */
+export type MeetingVerificationSubmitResult = {
+  cardId: number
+  submittedPetId: number
+  status: MeetingVerificationApiStatus
+  counterpartSubmitted: boolean
+  meetingId: number | null
+  confirmed: boolean
+  verificationMethod: 'GPS' | 'CODE' | null
+  confirmedAt: string | null
+  codeRequired: boolean
+  distanceMeters: number | null
+}
+
+/** GET 응답. 좌표는 내려오지 않는다 — "현재 사용자에게 필요한 상태"만 온다. */
+export type MeetingVerificationStatusResult = {
+  cardId: number
+  status: MeetingVerificationApiStatus
+  mySubmitted: boolean
+  counterpartSubmitted: boolean
+  meetingId: number | null
+  confirmed: boolean
+  verificationMethod: 'GPS' | 'CODE' | null
+  confirmedAt: string | null
+  codeRequired: boolean
+  distanceMeters: number | null
+}
+
+/**
+ * 확인 코드 fallback(#164). CODE_REQUIRED 상태에서만 쓰인다. 계약 원본:
+ * dogether(백엔드)/docs/spec/M3/04_M3_API_상세명세.md
+ * `POST /meeting-cards/{cardId}/confirmation-codes(/verify|/confirm)`.
+ */
+export type IssueConfirmationCodeResult = {
+  /** 평문 코드. 발급 응답에서만 한 번 내려온다 — 저장하지 말고 화면에만 보여준다. */
+  code: string
+  expiresAt: string
+}
+
+export type ConfirmationCodeStatus = 'WAITING_ISSUER_CONFIRMATION' | 'CONFIRMED'
+
+/** verify/confirm 공통 응답. */
+export type ConfirmationCodeResult = {
+  cardId: number
+  status: ConfirmationCodeStatus
+  meetingId: number | null
+  verificationMethod: 'GPS' | 'CODE' | null
+  confirmedAt: string | null
+}
+
+/**
+ * 만남 후기·발자국(#166). 계약 원본: dogether(백엔드)/docs/spec/M3/04_M3_API_상세명세.md §11.
+ * `POST /meetings/{meetingId}/reviews` — 여기 `meetingId`는 카드 id가 아니라
+ * GPS/CODE 확정 뒤 얻는 `Meeting.id`(MeetingVerificationStatusResult.meetingId)다.
+ */
+export type MeetingReviewSubmitBody = {
+  /** 같은 Pet 재요청 식별용 멱등키. */
+  clientRequestId: string
+  /** 공백 불가, 최대 30자. */
+  placeTag: string
+  /** 선택, 최대 500자. */
+  content?: string
+}
+
+export type ReviewFootprintResult = {
+  /** 이 요청으로 새 발자국이 생겼는지. */
+  granted: boolean
+  footprintId: number
+  /** 그날(Asia/Seoul) 발자국이 이미 있어서 새로 안 만들었는지. */
+  duplicateDay: boolean
+  /** Asia/Seoul 기준 적립 날짜 (YYYY-MM-DD). */
+  earnedDate: string
+}
+
+export type MeetingReviewSubmitResult = {
+  reviewId: number
+  meetingId: number
+  placeTag: string
+  content: string | null
+  createdAt: string
+  footprint: ReviewFootprintResult
+}
+
+export type FootprintCounterpartPet = {
+  petId: number
+  nickname: string
+}
+
+export type FootprintItem = {
+  footprintId: number
+  meetingId: number
+  counterpartPet: FootprintCounterpartPet
+  earnedDate: string
+  createdAt: string
+}
+
+export type FootprintListResult = {
+  items: FootprintItem[]
+  page: { nextCursor: string | null; hasNext: boolean }
+}

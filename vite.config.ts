@@ -43,6 +43,18 @@ export default defineConfig({
           })
         },
       },
+      // OAuth 브라우저 시작·콜백. 백엔드는 /api 프리픽스 없이 루트에 붙는다
+      // (전체 페이지 이동 대상이라 CORS 문제는 없지만, 개발 서버 포트로 요청이
+      // 오므로 여기서도 백엔드로 넘겨야 한다). features/auth/api.ts 의
+      // oauthStartUrl() 이 이 경로로 이동시킨다.
+      '/oauth2': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+      },
+      '/login/oauth2': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8080',
+        changeOrigin: true,
+      },
       // 채팅 WebSocket(STOMP). 백엔드는 /api 프리픽스 없이 /ws 에 붙는다.
       // OriginHandshakeInterceptor 가 CorsProperties.allowedOrigins 로 Origin 을
       // 한 번 더 검사하고 와일드카드를 거부하므로, /api 와 같은 이유로 Origin 을 뗀다.

@@ -6,6 +6,7 @@ import { BackLink } from '@/components/ui/BackLink'
 import { Button } from '@/components/ui/Button'
 import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
 import { cancelMeetingCard, getMeetingCard } from '@/features/meeting/api'
+import { MeetingVerificationPanel } from '@/features/meeting/MeetingVerificationPanel'
 import { CARD_TYPE_LABEL } from '@/features/meeting/types'
 
 export function MeetingCardPage() {
@@ -84,6 +85,8 @@ export function MeetingCardPage() {
               취소하지 못했습니다. 잠시 후 다시 시도해 주세요.
             </p>
           )}
+
+          {card.data.status === 'OPEN' && <MeetingVerificationPanel cardId={idNum} />}
 
           {card.data.status === 'OPEN' && (
             <div className="mt-6">
