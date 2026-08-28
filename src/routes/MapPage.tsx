@@ -14,7 +14,7 @@ import {
   WarningCircle,
   X,
 } from '@phosphor-icons/react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { listNearbyMapPlaces, searchVWorld } from '@/features/map/api'
 import { MapCanvas } from '@/features/map/MapCanvas'
 import type { BackendMapPlaceType, MapBounds, MapCenter, MapPlace } from '@/features/map/types'
@@ -137,6 +137,13 @@ export function MapPage() {
         }}
         onMapReady={setMapActions}
       />
+
+      <Link
+        to="/routes/new"
+        className="absolute right-[4.5rem] top-3 z-10 rounded-full bg-primary px-4 py-3 text-sm font-bold text-on-primary shadow-[var(--dg-shadow-md)] hover:bg-primary-hover md:right-[5rem] md:top-5"
+      >
+        산책 경로 만들기
+      </Link>
 
       {!hasVworldKey && (
         <div className="absolute left-1/2 top-4 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-surface/95 px-4 py-2 text-[13px] font-medium shadow-[var(--dg-shadow-md)] backdrop-blur">

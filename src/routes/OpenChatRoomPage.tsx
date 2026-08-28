@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, CalendarPlus, Dog, MapPin, PaperPlaneRight, SignOut, Sparkle, Trash, UserPlus, UsersThree, X } from '@phosphor-icons/react'
+import { ArrowLeft, CalendarPlus, Dog, MapPin, PaperPlaneRight, Path, SignOut, Sparkle, Trash, UserPlus, UsersThree, X } from '@phosphor-icons/react'
 import { useAuth } from '@/features/auth/auth-context'
 import {
   deleteOpenChatRoom,
@@ -10,8 +10,11 @@ import {
   inviteFriendToOpenChat,
   leaveOpenChatRoom,
   listChatMessages,
+  listOpenChatParticipants,
   requestOpenChatCardDraft,
+  requestOpenChatAiRoute,
   sendChatMessage,
+  shareRouteToOpenChat,
 } from '@/features/chat/api'
 import { listFriends } from '@/features/friend/api'
 import { formatTime, mergeMessages, type ChatMessage } from '@/features/chat/types'
@@ -27,6 +30,10 @@ import {
 } from '@/features/chat/placeSuggestion'
 import { InlineFacilityMap } from '@/features/chat/InlineFacilityMap'
 import { SharedFacilityMapMessage } from '@/features/chat/SharedFacilityMapMessage'
+import { InlineRouteMapMessage } from '@/features/chat/InlineRouteMapMessage'
+import { getRoute, saveRoute } from '@/features/route/api'
+import { subscribeToRouteStatus } from '@/features/route/realtime'
+import type { RouteResult } from '@/features/route/types'
 
 const FALLBACK_POLL_MS = 10_000
 
@@ -46,12 +53,17 @@ export function OpenChatRoomPage() {
   const [aiDrafts, setAiDrafts] = useState<OpenChatCardDraft[]>([])
   const [aiNotice, setAiNotice] = useState<string | null>(null)
   const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiRouteGenerating, setAiRouteGenerating] = useState(false)
+  const [aiRouteNotice, setAiRouteNotice] = useState<string | null>(null)
+  const [aiRouteRequestId, setAiRouteRequestId] = useState<string | null>(null)
+  const [aiRoutePreview, setAiRoutePreview] = useState<RouteResult | null>(null)
   const [dismissedPlaceMessageId, setDismissedPlaceMessageId] = useState<number | null>(null)
   const [approvedPlaceMessageId, setApprovedPlaceMessageId] = useState<number | null>(null)
   const [placeConsentMessage, setPlaceConsentMessage] = useState<ChatMessage | null>(null)
   const afterRef = useRef<number | null>(null)
   const bottomRef = useRef<HTMLLIElement | null>(null)
   const latestDraftRequestIdRef = useRef<string | null>(null)
+  const sharingAiRouteIdsRef = useRef(new Set<string>())
 
   useEffect(() => {
     setMessages([])
@@ -59,6 +71,10 @@ export function OpenChatRoomPage() {
     setAiDrafts([])
     setAiNotice(null)
     setAiGenerating(false)
+    setAiRouteGenerating(false)
+    setAiRouteNotice(null)
+    setAiRouteRequestId(null)
+    setAiRoutePreview(null)
     setDismissedPlaceMessageId(null)
     setApprovedPlaceMessageId(null)
     setPlaceConsentMessage(null)
@@ -134,6 +150,73 @@ export function OpenChatRoomPage() {
     )
   }, [applyDraftNotification, roomIdNumber, room.isSuccess, valid])
 
+  const markAiRouteReady = useCallback((route: RouteResult) => {
+    setAiRoutePreview(route)
+    setAiRouteGenerating(false)
+    setAiRouteNotice('AI 경로가 완성되었습니다. 확인 후 채팅방 공유 여부를 선택해 주세요.')
+  }, [])
+
+  const loadAiRoutePreview = useCallback(async (requestId: string) => {
+    try {
+      const route = await getRoute(requestId)
+      if (route.status === 'COMPLETED') markAiRouteReady(route)
+    } catch (error) {
+      setAiRouteGenerating(false)
+      setAiRouteNotice(error instanceof ApiError ? error.message : '완성된 AI 경로를 불러오지 못했습니다.')
+    }
+  }, [markAiRouteReady])
+
+  const confirmAiRouteShare = useCallback(async (requestId: string) => {
+    if (sharingAiRouteIdsRef.current.has(requestId)) return
+    sharingAiRouteIdsRef.current.add(requestId)
+    try {
+      await saveRoute(requestId)
+      const shared = await shareRouteToOpenChat(roomIdNumber, {
+        routeId: requestId,
+        clientMessageId: `ai-route:${requestId}`,
+      })
+      setMessages((previous) => mergeMessages(previous, [shared]))
+      afterRef.current = Math.max(afterRef.current ?? 0, shared.messageId)
+      setAiRouteRequestId(null)
+      setAiRoutePreview(null)
+      setAiRouteGenerating(false)
+      setAiRouteNotice('AI가 만든 경로를 채팅방에 공유했습니다.')
+    } catch (error) {
+      sharingAiRouteIdsRef.current.delete(requestId)
+      setAiRouteGenerating(false)
+      setAiRouteNotice(error instanceof ApiError ? error.message : '완성된 AI 경로를 공유하지 못했습니다.')
+    }
+  }, [roomIdNumber])
+
+  useEffect(() => {
+    if (!valid || !room.isSuccess) return
+    return subscribeToRouteStatus((event) => {
+      if (event.requestId !== aiRouteRequestId) return
+      if (event.status === 'FAILED') {
+        setAiRouteRequestId(null)
+        setAiRouteGenerating(false)
+        setAiRouteNotice('AI 경로 계산에 실패했습니다. 대화 속 장소를 더 구체적으로 적어 주세요.')
+        return
+      }
+      void loadAiRoutePreview(event.requestId)
+    })
+  }, [aiRouteRequestId, loadAiRoutePreview, room.isSuccess, valid])
+
+  useEffect(() => {
+    if (!aiRouteRequestId || aiRoutePreview) return
+    const timer = window.setInterval(() => {
+      void getRoute(aiRouteRequestId).then((route) => {
+        if (route.status === 'COMPLETED') markAiRouteReady(route)
+        if (route.status === 'FAILED') {
+          setAiRouteRequestId(null)
+          setAiRouteGenerating(false)
+          setAiRouteNotice('AI 경로 계산에 실패했습니다. 대화 속 장소를 더 구체적으로 적어 주세요.')
+        }
+      }).catch(() => undefined)
+    }, 2_000)
+    return () => window.clearInterval(timer)
+  }, [aiRoutePreview, aiRouteRequestId, markAiRouteReady])
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [messages.length])
@@ -191,10 +274,35 @@ export function OpenChatRoomPage() {
       setAiNotice(error instanceof ApiError ? error.message : 'AI 약속 카드를 요청하지 못했습니다.')
     },
   })
+  const requestAiRoute = useMutation({
+    mutationFn: () => requestOpenChatAiRoute(roomIdNumber),
+    onMutate: () => {
+      setAiRouteGenerating(true)
+      setAiRoutePreview(null)
+      setAiRouteNotice('최근 메시지 30개에서 운동 종류와 경로 조건을 찾고 있습니다.')
+    },
+    onSuccess: (result) => {
+      setAiRouteRequestId(result.requestId)
+      const label = result.activityType === 'RUN' ? '러닝' : result.activityType === 'CYCLE' ? '자전거' : '걷기'
+      setAiRouteNotice(result.routeMode === 'ROUND_TRIP'
+        ? `${result.start}에서 출발하는 ${result.targetDistanceKm ?? ''}km ${label} 왕복 코스를 계산하고 있습니다.`
+        : `${result.start}에서 ${result.destination}까지 ${label} 경로를 계산하고 있습니다.`)
+    },
+    onError: (error) => {
+      setAiRouteGenerating(false)
+      setAiRouteNotice(error instanceof ApiError ? error.message : 'AI 경로를 요청하지 못했습니다.')
+    },
+  })
   const friends = useQuery({
     queryKey: ['friends', me?.activePetId, 'open-chat-invite'],
     queryFn: () => listFriends(me!.activePetId!, null, 100),
     enabled: inviteOpen && me?.activePetId != null,
+    retry: false,
+  })
+  const participants = useQuery({
+    queryKey: ['chat', 'open', roomIdNumber, 'participants'],
+    queryFn: () => listOpenChatParticipants(roomIdNumber),
+    enabled: inviteOpen && valid,
     retry: false,
   })
   const invite = useMutation({
@@ -206,6 +314,7 @@ export function OpenChatRoomPage() {
           ? '친구를 채팅방에 초대했습니다.'
           : '이미 채팅방에 참여 중인 친구입니다.',
       )
+      void participants.refetch()
     },
     onError: (error) => {
       setInviteNotice(
@@ -322,6 +431,8 @@ export function OpenChatRoomPage() {
   const fallbackCopy = fallbackDraft?.fallbackReason
     ? FALLBACK_MESSAGE[fallbackDraft.fallbackReason]
     : null
+  const participantPetIds = new Set(participants.data?.map((participant) => participant.petId) ?? [])
+  const invitableFriends = friends.data?.items.filter((friend) => !participantPetIds.has(friend.petId)) ?? []
 
   return (
     <div className="sticky top-14 mx-auto flex h-[calc(100dvh-3.5rem-64px-env(safe-area-inset-bottom))] w-full max-w-3xl flex-col overflow-hidden md:h-[calc(100dvh-3.5rem)]">
@@ -351,6 +462,16 @@ export function OpenChatRoomPage() {
           className="grid size-11 place-items-center rounded-lg text-primary-strong hover:bg-primary-subtle disabled:opacity-50"
         >
           <Sparkle size={20} weight="fill" />
+        </button>
+        <button
+          type="button"
+          aria-label="대화로 AI 경로 만들기"
+          title="최근 대화로 AI 경로 만들기"
+          disabled={aiRouteGenerating || requestAiRoute.isPending}
+          onClick={() => requestAiRoute.mutate()}
+          className="grid size-11 place-items-center rounded-lg text-primary-strong hover:bg-primary-subtle disabled:opacity-50"
+        >
+          <Path size={21} weight="bold" />
         </button>
         <button
           type="button"
@@ -392,13 +513,55 @@ export function OpenChatRoomPage() {
       </header>
 
       {inviteOpen && (
-        <section className="border-b border-border bg-surface px-4 py-3" aria-label="친구 초대">
-          <div className="mb-2 flex items-center justify-between gap-3">
+        <section
+          className="absolute right-3 top-[4.25rem] z-30 w-[min(24rem,calc(100%-1.5rem))] rounded-2xl border border-border bg-surface p-4 shadow-xl"
+          aria-label="현재 참여자와 친구 초대"
+        >
+          <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-semibold">친구 초대</h2>
-              <p className="text-[13px] text-muted-foreground">친구로 등록된 펫을 이 채팅방에 초대합니다.</p>
+              <h2 className="font-semibold">채팅방 참여자</h2>
+              <p className="text-[13px] text-muted-foreground">현재 참여 중인 사용자와 초대 가능한 친구입니다.</p>
             </div>
+            <button
+              type="button"
+              aria-label="참여자 팝업 닫기"
+              onClick={() => setInviteOpen(false)}
+              className="grid size-9 shrink-0 place-items-center rounded-lg hover:bg-muted"
+            >
+              <X size={18} />
+            </button>
           </div>
+          <div className="mb-3 rounded-xl bg-primary-subtle p-3">
+            <p className="mb-2 text-[13px] font-semibold text-primary-strong">
+              현재 참여 중 {participants.data?.length ?? 0}명
+            </p>
+            {participants.isPending ? (
+              <p className="py-2 text-[13px] text-muted-foreground">참여자를 불러오는 중…</p>
+            ) : participants.isError ? (
+              <p role="alert" className="py-2 text-[13px] text-destructive">참여자 목록을 불러오지 못했습니다.</p>
+            ) : participants.data.length === 0 ? (
+              <p className="py-2 text-[13px] text-muted-foreground">현재 참여자가 없습니다.</p>
+            ) : (
+              <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto">
+                {participants.data.map((participant) => (
+                  <li key={participant.petId} className="flex items-center gap-3 rounded-lg bg-surface/80 px-2 py-2">
+                    {participant.profileUrl ? (
+                      <img src={participant.profileUrl} alt="" className="size-9 shrink-0 rounded-full object-cover" />
+                    ) : (
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+                        <Dog size={19} />
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1 truncate font-medium">{participant.nickname}</span>
+                    {participant.petId === me?.activePetId && (
+                      <span className="rounded-full bg-primary px-2 py-0.5 text-[12px] font-semibold text-on-primary">나</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <h3 className="mb-1 text-[14px] font-semibold">친구 초대</h3>
           {inviteNotice && (
             <p role="status" className="mb-2 text-[14px] text-muted-foreground">{inviteNotice}</p>
           )}
@@ -406,11 +569,11 @@ export function OpenChatRoomPage() {
             <p className="py-3 text-[14px] text-muted-foreground">친구 목록을 불러오는 중…</p>
           ) : friends.isError ? (
             <p role="alert" className="py-3 text-[14px] text-destructive">친구 목록을 불러오지 못했습니다.</p>
-          ) : friends.data.items.length === 0 ? (
+          ) : invitableFriends.length === 0 ? (
             <p className="py-3 text-[14px] text-muted-foreground">초대할 친구가 없습니다.</p>
           ) : (
             <ul className="flex max-h-52 flex-col gap-1 overflow-y-auto">
-              {friends.data.items.map((friend) => (
+              {invitableFriends.map((friend) => (
                 <li key={friend.petId} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-primary-subtle">
                   <span className="grid size-9 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
                     <Dog size={19} />
@@ -489,6 +652,29 @@ export function OpenChatRoomPage() {
       </ul>
 
       <div className="border-t border-border bg-surface p-3">
+        {aiRouteNotice && (
+          <section className="mb-3 rounded-xl border border-primary/30 bg-primary-subtle p-3" aria-label="AI 경로 생성 상태">
+            <div className="flex items-start gap-2">
+            <Path className="mt-0.5 shrink-0 text-primary-strong" size={18} weight="bold" />
+            <p role="status" className="min-w-0 flex-1 text-[14px] text-muted-foreground">{aiRouteNotice}</p>
+            {!aiRouteGenerating && !aiRoutePreview && (
+              <button type="button" aria-label="AI 경로 알림 닫기" onClick={() => setAiRouteNotice(null)} className="grid size-7 shrink-0 place-items-center rounded-lg hover:bg-primary/20"><X size={15} /></button>
+            )}
+            </div>
+            {aiRoutePreview && aiRouteRequestId && (
+              <div className="mt-3 rounded-lg border border-primary/20 bg-surface p-3 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <p><span className="text-muted-foreground">거리</span><br /><strong>{aiRoutePreview.totalDistanceMeters == null ? '-' : `${(aiRoutePreview.totalDistanceMeters / 1000).toFixed(2)} km`}</strong></p>
+                  <p><span className="text-muted-foreground">예상시간</span><br /><strong>{aiRoutePreview.durationMinutes == null ? '-' : `${Math.round(aiRoutePreview.durationMinutes)}분`}</strong></p>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button type="button" onClick={() => void confirmAiRouteShare(aiRouteRequestId)} className="min-h-10 flex-1 rounded-lg bg-primary px-3 font-semibold text-primary-foreground">채팅방에 공유</button>
+                  <button type="button" onClick={() => { setAiRouteRequestId(null); setAiRoutePreview(null); setAiRouteNotice('AI 경로 공유를 취소했습니다.') }} className="min-h-10 rounded-lg border border-border bg-surface px-4 font-semibold">취소</button>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
         {!placeFlowActive && (aiGenerating || aiNotice || aiDrafts.length > 0) && (
           <section className="mb-3 rounded-xl border border-primary/30 bg-primary-subtle p-3" aria-label="AI 약속 카드">
             <div className="mb-2 flex items-center gap-2 text-[14px] font-semibold text-primary-strong">
@@ -538,7 +724,7 @@ export function OpenChatRoomPage() {
                         <p className="mt-1 text-[13px] text-muted-foreground">
                           {formatDraftDateTime(card)}
                         </p>
-                        <p className="mt-1 text-[13px] text-muted-foreground">참여 펫 {card.participantPetIds.length}마리</p>
+                        <p className="mt-1 text-[13px] text-muted-foreground">참여 인원 {card.participantPetIds.length}명</p>
                         <p className="mt-2 text-[13px] font-semibold text-primary-strong">확인하고 약속 만들기</p>
                       </Link>
                     ))}
@@ -596,6 +782,24 @@ function OpenMessageRow({
     return <p className="mx-auto w-fit rounded-full bg-muted px-3 py-1 text-[13px] text-muted-foreground">{message.body}</p>
   }
   const mine = message.senderPetId === activePetId
+  if (message.type === 'ROUTE_SHARE' && message.sharedRouteId) {
+    return (
+      <div className={cn('flex', mine ? 'justify-end' : 'justify-start')}>
+        <div className="max-w-[82%] rounded-2xl border-2 border-primary bg-surface px-4 py-3">
+          <p className="flex items-center gap-1.5 font-semibold text-primary-strong">
+            <MapPin size={18} weight="fill" />공유 경로
+          </p>
+          <p className="mt-1 text-[14px] text-muted-foreground">지도와 거리·예상시간을 확인해 보세요.</p>
+          <InlineRouteMapMessage roomId={message.roomId} routeId={message.sharedRouteId} />
+          <div className="mt-3 flex gap-2">
+            <Link className="rounded-lg border border-border px-3 py-2 text-sm font-semibold" to={`/chat/${message.roomId}/meeting/new?openChat=true&routeRequestId=${message.sharedRouteId}`}>
+              이 경로로 약속
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
   if (message.type === 'CARD') {
     const inner = (
       <>

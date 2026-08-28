@@ -11,9 +11,10 @@ type ChatMessageEvent = {
   senderPetId: number | null
   senderPetNickname: string | null
   senderType: 'PET' | 'SYSTEM'
-  type: 'TEXT' | 'CARD' | 'MAP' | 'SYSTEM'
+  type: 'TEXT' | 'CARD' | 'ROUTE_SHARE' | 'MAP' | 'SYSTEM'
   body: string | null
   map: import('./types').ChatMapMessage | null
+  sharedRouteId: string | null
   meetingCardId: number | null
   clientMessageId: string | null
   sentAt: string
@@ -59,6 +60,7 @@ export function subscribeToChatRoom(
           type: event.type,
           body: event.body,
           map: event.map ?? null,
+          sharedRouteId: event.sharedRouteId ?? null,
           meetingCardId: event.meetingCardId ?? null,
           clientMessageId: event.clientMessageId,
           createdAt: event.sentAt,

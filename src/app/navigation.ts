@@ -30,5 +30,5 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/board', label: '게시판', icon: Article },
   { to: '/setlogs/new', label: '업로드', icon: Plus, emphasized: true },
   { to: '/chat', label: '채팅', icon: ChatCircle },
-  { to: '/map', label: '지도', icon: MapTrifold },
+  { to: '/routes/new', label: '지도', icon: MapTrifold },
 ]

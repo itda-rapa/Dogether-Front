@@ -24,7 +24,7 @@ import {
 import { listMyPets, updatePetProfileImage } from '@/features/pet/api'
 import { ageFrom, type Pet } from '@/features/pet/types'
 import { listMyMeetingCards } from '@/features/meeting/api'
-import { CARD_TYPE_LABEL, type MeetingCardListItem } from '@/features/meeting/types'
+import type { MeetingCardListItem } from '@/features/meeting/types'
 import { formatMeetAt, formatParticipants } from '@/features/meeting/format'
 import { cn } from '@/lib/cn'
 
@@ -389,7 +389,7 @@ function MeetingPreviewRow({
       className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 transition-colors hover:bg-primary-subtle"
     >
       <span className="min-w-0 truncate text-[14px] font-medium">
-        {withLabel}와의 {CARD_TYPE_LABEL[card.cardType]}
+        {withLabel}와의 약속 · {card.participantCount}명
       </span>
       <span className="shrink-0 text-[13px] text-muted-foreground">
         {formatMeetAt(card.meetAt)}

@@ -51,6 +51,7 @@ import { LoginPage } from '@/routes/LoginPage'
 import { SignupPage } from '@/routes/SignupPage'
 import { ResetPasswordPage } from '@/routes/ResetPasswordPage'
 import { NotFoundPage } from '@/routes/NotFoundPage'
+import { RoutePlannerPage } from '@/routes/RoutePlannerPage'
 
 const MapPage = lazy(() =>
   import('@/routes/MapPage').then((module) => ({ default: module.MapPage })),
@@ -129,6 +130,7 @@ export default function App() {
                     }
                   />
                   <Route path="map/:placeId" element={<PlaceDetailPage />} />
+                  <Route path="routes/new" element={<RoutePlannerPage />} />
 
                   <Route path="setlogs/new" element={<SetlogUploadPage />} />
 

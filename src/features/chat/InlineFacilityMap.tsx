@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { MapPin, X } from '@phosphor-icons/react'
+import { MapPin, Sparkle, X } from '@phosphor-icons/react'
 import { createChatMapMessage } from './api'
 import { MapCanvas } from '@/features/map/MapCanvas'
 import type { CulturalFacilityCategory, MapCenter, MapPlace } from '@/features/map/types'
@@ -73,12 +73,18 @@ export function InlineFacilityMap({ roomId, triggerMessageId, category, keyword,
 
   return (
     <section className="mt-2 overflow-hidden rounded-2xl border border-primary/30 bg-surface shadow-sm" aria-label={`${keyword} 주변 지도`}>
-      <header className="flex items-center gap-2 px-3 py-2">
-        <MapPin size={18} weight="fill" className="text-primary-strong" />
-        <strong className="min-w-0 flex-1 truncate text-[14px]">가장 가까운 {keyword} 5곳</strong>
-        <button type="button" onClick={onDismiss} aria-label="주변 시설 지도 닫기" className="grid size-9 place-items-center rounded-lg hover:bg-primary-subtle">
-          <X size={18} />
-        </button>
+      <header className="px-3 py-2">
+        <div className="flex items-center gap-2">
+          <MapPin size={18} weight="fill" className="text-primary-strong" />
+          <strong className="min-w-0 flex-1 truncate text-[14px]">가장 가까운 {keyword} 5곳</strong>
+          <button type="button" onClick={onDismiss} aria-label="주변 시설 지도 닫기" className="grid size-9 place-items-center rounded-lg hover:bg-primary-subtle">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <Sparkle size={13} weight="fill" className="shrink-0 text-primary-strong" aria-hidden="true" />
+          AI가 채팅 내용을 분석해 검색한 장소 정보입니다.
+        </p>
       </header>
       <div className="relative h-64 border-y border-border bg-primary-subtle">
         <MapCanvas
