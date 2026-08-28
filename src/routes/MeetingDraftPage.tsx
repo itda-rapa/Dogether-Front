@@ -4,32 +4,29 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { WarningCircle, Sparkle, ArrowClockwise } from '@phosphor-icons/react'
+import { WarningCircle, ArrowClockwise } from '@phosphor-icons/react'
 import { Page } from '@/components/ui/Page'
 import { Button } from '@/components/ui/Button'
 import { Field } from '@/components/ui/Field'
 import { inputClass } from '@/components/ui/input-class'
 import { cn } from '@/lib/cn'
 import { createCardDraft, createMeetingCard } from '@/features/meeting/api'
+import { getSharedRoute } from '@/features/route/api'
+import { InlineRouteMapMessage } from '@/features/chat/InlineRouteMapMessage'
+import { useAuth } from '@/features/auth/auth-context'
 import {
   getOpenChatCardDraft,
-  type OpenChatCardDraft,
+  listOpenChatParticipants,
 } from '@/features/chat/api'
 import {
-  CARD_TYPES,
-  CARD_TYPE_LABEL,
   FALLBACK_MESSAGE,
   aiFilledMap,
   isCardType,
   joinMeetAt,
   toFormValues,
-  type CardType,
 } from '@/features/meeting/types'
 
 const schema = z.object({
-  cardType: z
-    .string()
-    .refine(isCardType, { message: '약속 유형을 선택해 주세요.' }),
   date: z.string().min(1, '날짜를 선택해 주세요.'),
   time: z.string().min(1, '시간을 선택해 주세요.'),
   placeText: z
@@ -41,7 +38,7 @@ const schema = z.object({
 
 type FormValues = z.input<typeof schema>
 
-const EMPTY: FormValues = { cardType: '', date: '', time: '', placeText: '' }
+const EMPTY: FormValues = { date: '', time: '', placeText: '' }
 
 /**
  * AI 약속 초안 확인 화면.
@@ -57,9 +54,11 @@ export function MeetingDraftPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const roomIdNum = Number(roomId)
+  const { me } = useAuth()
   const [searchParams] = useSearchParams()
   const draftIdParam = searchParams.get('draftId')
   const openChat = searchParams.get('openChat') === 'true'
+  const routeRequestId = searchParams.get('routeRequestId')
   const selectedDraftId = draftIdParam ? Number(draftIdParam) : null
   const draftQueryKey = openChat
     ? ['card-draft', roomId, 'open', selectedDraftId]
@@ -89,27 +88,59 @@ export function MeetingDraftPage() {
   const drafts = draftQuery.data
   const draft = drafts?.find((d) => String(d.draftId) === draftIdParam) ?? drafts?.[0]
   const aiFilled = draft ? aiFilledMap(draft) : null
-  const openChatDraft = openChat ? (draft as OpenChatCardDraft | undefined) : undefined
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<number[]>([])
 
-  const { register, handleSubmit, reset, watch, formState } = useForm<FormValues>({
+  const { register, handleSubmit, reset, formState } = useForm<FormValues>({
     resolver: zodResolver(schema),
     mode: 'onTouched',
     defaultValues: EMPTY,
   })
 
-  const selectedType = watch('cardType')
+  const participantsQuery = useQuery({
+    queryKey: ['chat', 'open', 'room', roomIdNum, 'participants'],
+    queryFn: () => listOpenChatParticipants(roomIdNum),
+    enabled: openChat && Number.isFinite(roomIdNum),
+    retry: false,
+  })
+  const routeQuery = useQuery({
+    queryKey: ['chat', 'shared-route', roomIdNum, routeRequestId],
+    queryFn: ({ signal }) => getSharedRoute(roomIdNum, routeRequestId!, signal),
+    enabled: openChat && routeRequestId != null,
+    retry: false,
+  })
 
   // 초안이 도착하면 폼을 채운다. 비어 있는 값은 빈칸/미선택으로 남는다.
   useEffect(() => {
-    if (draft) reset(toFormValues(draft))
+    if (!draft) return
+    const values = toFormValues(draft)
+    reset({ date: values.date, time: values.time, placeText: values.placeText })
   }, [draft, reset])
 
   useEffect(() => {
-    if (openChatDraft) {
-      setSelectedParticipantIds([...openChatDraft.participantPetIds])
-    }
-  }, [openChatDraft])
+    if (draft || !routeQuery.data) return
+    const facilities = Object.values(routeQuery.data.nearbyFacilities ?? {})
+      .flat()
+      .filter((facility) => facility.name?.trim())
+      .sort((a, b) => (a.distanceMeters ?? Number.MAX_SAFE_INTEGER) - (b.distanceMeters ?? Number.MAX_SAFE_INTEGER))
+    const nearest = facilities[0]
+    const departure = new Date(routeQuery.data.departureAt)
+    const meetAt = Number.isNaN(departure.getTime()) || departure.getTime() < Date.now()
+      ? new Date(Date.now() + 60 * 60 * 1000)
+      : departure
+    const local = new Date(meetAt.getTime() - meetAt.getTimezoneOffset() * 60_000).toISOString()
+    reset({
+      date: local.slice(0, 10),
+      time: local.slice(11, 16),
+      placeText: nearest
+        ? [nearest.name?.trim(), nearest.address?.trim()].filter(Boolean).join(' · ')
+        : '공유 경로 인근',
+    })
+  }, [draft, reset, routeQuery.data])
+
+  useEffect(() => {
+    if (!participantsQuery.data) return
+    setSelectedParticipantIds(participantsQuery.data.map((participant) => participant.petId))
+  }, [participantsQuery.data])
 
   const createCard = useMutation({
     mutationFn: createMeetingCard,
@@ -133,10 +164,12 @@ export function MeetingDraftPage() {
     createCard.mutate({
       roomId: roomIdNum,
       draftId: draft?.draftId ?? null,
-      cardType: values.cardType as CardType,
+      cardType: routeRequestId ? 'WALK' : isCardType(draft?.cardType) ? draft.cardType : 'OTHER',
       placeText: values.placeText.trim(),
       meetAt,
+      participantCount: openChat ? selectedParticipantIds.length : 2,
       ...(openChat ? { participantPetIds: selectedParticipantIds } : {}),
+      ...(routeRequestId ? { routeRequestId } : {}),
     })
   })
 
@@ -144,6 +177,14 @@ export function MeetingDraftPage() {
     draft?.fallback && draft.fallbackReason
       ? FALLBACK_MESSAGE[draft.fallbackReason]
       : null
+  const routeSummary = routeQuery.data
+  const routeActivityLabel = routeSummary?.activityType === 'RUN'
+    ? '러닝'
+    : routeSummary?.activityType === 'CYCLE' ? '자전거' : '걷기'
+  const routeNearbyPlace = Object.values(routeSummary?.nearbyFacilities ?? {})
+    .flat()
+    .filter((facility) => facility.name?.trim())
+    .sort((a, b) => (a.distanceMeters ?? Number.MAX_SAFE_INTEGER) - (b.distanceMeters ?? Number.MAX_SAFE_INTEGER))[0]
 
   return (
     <Page
@@ -172,47 +213,54 @@ export function MeetingDraftPage() {
       )}
 
       {!draftQuery.isPending && (
-        <form onSubmit={onSubmit} className="flex flex-col gap-6" noValidate>
-          <fieldset className="flex flex-col gap-1.5">
-            <legend className="mb-1.5 flex items-center gap-2 font-medium">
-              약속 유형
-              {aiFilled?.cardType && <AiBadge />}
-            </legend>
-
-            {draft && !aiFilled?.cardType && (
-              <p className="mb-1 text-[13px] text-muted-foreground">
-                유형이 정해지지 않았습니다. 직접 골라 주세요.
-              </p>
-            )}
-
-            <div className="grid grid-cols-3 gap-2">
-              {CARD_TYPES.map((type) => (
-                <label
-                  key={type}
-                  className={cn(
-                    'flex min-h-11 cursor-pointer items-center justify-center rounded-lg border px-3 py-3 text-center font-medium transition-colors',
-                    selectedType === type
-                      ? 'border-primary bg-primary text-on-primary'
-                      : 'border-border bg-surface text-muted-foreground hover:bg-primary-subtle',
-                  )}
-                >
-                  <input
-                    type="radio"
-                    value={type}
-                    className="sr-only"
-                    {...register('cardType')}
-                  />
-                  {CARD_TYPE_LABEL[type]}
-                </label>
-              ))}
+        <>
+        {routeRequestId && (
+          <section className="mb-6 rounded-2xl border border-primary/30 bg-surface p-4 shadow-sm" aria-label="약속 경로 미리보기">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold text-primary-strong">함께 이동할 경로</h2>
+                {routeSummary ? (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {routeActivityLabel} · {((routeSummary.totalDistanceMeters ?? 0) / 1000).toFixed(2)}km · 약 {Math.round(routeSummary.durationMinutes ?? 0)}분
+                    {routeSummary.waypointNodeIds.length > 0 ? ` · 경유지 ${routeSummary.waypointNodeIds.length}곳` : ''}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-muted-foreground">공유된 경로 정보를 불러오고 있습니다…</p>
+                )}
+              </div>
             </div>
-
-            {formState.errors.cardType && (
-              <p role="alert" className="text-[13px] text-destructive">
-                {formState.errors.cardType.message}
+            <InlineRouteMapMessage roomId={roomIdNum} routeId={routeRequestId} />
+            {routeNearbyPlace && (
+              <p className="mt-3 text-sm">
+                <span className="font-medium">경로 인접 장소</span>
+                <span className="ml-2 text-muted-foreground">{routeNearbyPlace.name}{routeNearbyPlace.address ? ` · ${routeNearbyPlace.address}` : ''}</span>
               </p>
             )}
-          </fieldset>
+            <p className="mt-1 text-xs text-muted-foreground">지도는 약속에 연결된 저장 경로이며, 장소 입력란은 경로에서 가장 가까운 시설을 기준으로 자동 채웁니다.</p>
+          </section>
+        )}
+        <form onSubmit={onSubmit} className="flex flex-col gap-6" noValidate>
+          {openChat ? (
+            <fieldset className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4">
+              <legend className="px-1 font-medium">참여 인원</legend>
+              <div className="mb-1 flex items-center justify-between text-[13px] text-muted-foreground"><span>현재 오픈채팅방 참여자 중 선택해 주세요.</span><span>{selectedParticipantIds.length}명 선택</span></div>
+              {participantsQuery.isPending && <p className="text-sm text-muted-foreground">참여자를 불러오고 있습니다…</p>}
+              {participantsQuery.isError && <p role="alert" className="text-sm text-destructive">참여자를 불러오지 못했습니다.</p>}
+              {participantsQuery.data?.map((participant) => {
+                const isMe = participant.petId === me?.activePetId
+                return (
+                  <label key={participant.petId} className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2">
+                    {participant.profileUrl ? <img src={participant.profileUrl} alt="" className="size-9 rounded-full object-cover" /> : <span aria-hidden="true" className="flex size-9 items-center justify-center rounded-full bg-primary-subtle font-semibold text-primary-strong">{participant.nickname.slice(0, 1)}</span>}
+                    <span className="min-w-0 flex-1 truncate font-medium">{participant.nickname}{isMe ? ' (나)' : ''}</span>
+                    <input type="checkbox" checked={selectedParticipantIds.includes(participant.petId)} disabled={isMe} onChange={(event) => setSelectedParticipantIds((current) => event.target.checked ? [...current, participant.petId] : current.filter((id) => id !== participant.petId))} className="size-5 accent-primary" aria-label={`${participant.nickname}${isMe ? ' (필수 참여)' : ''}`} />
+                  </label>
+                )
+              })}
+              {selectedParticipantIds.length < (routeRequestId ? 1 : 2) && <p role="alert" className="text-[13px] text-destructive">{routeRequestId ? '본인은 반드시 참여해야 합니다.' : '약속에는 최소 2명의 참여자가 필요합니다.'}</p>}
+            </fieldset>
+          ) : (
+            <p className="rounded-xl border border-border bg-surface p-4 font-medium">참여 인원 <span className="ml-2 text-primary-strong">2명</span></p>
+          )}
 
           <Field
             label="날짜"
@@ -230,14 +278,6 @@ export function MeetingDraftPage() {
               />
             )}
           </Field>
-
-          {openChatDraft && (
-            <ParticipantSelector
-              draft={openChatDraft}
-              selectedIds={selectedParticipantIds}
-              onChange={setSelectedParticipantIds}
-            />
-          )}
 
           <Field
             label="시간"
@@ -284,10 +324,7 @@ export function MeetingDraftPage() {
           <div className="flex gap-3">
             <Button
               type="submit"
-              disabled={
-                createCard.isPending ||
-                (openChat && selectedParticipantIds.length < 2)
-              }
+              disabled={createCard.isPending || participantsQuery.isError || (openChat && selectedParticipantIds.length < (routeRequestId ? 1 : 2))}
             >
               {createCard.isPending ? '저장 중…' : '약속 확정'}
             </Button>
@@ -301,85 +338,9 @@ export function MeetingDraftPage() {
             </Button>
           </div>
         </form>
+        </>
       )}
     </Page>
-  )
-}
-
-function ParticipantSelector({
-  draft,
-  selectedIds,
-  onChange,
-}: {
-  draft: OpenChatCardDraft
-  selectedIds: number[]
-  onChange: (ids: number[]) => void
-}) {
-  const participants = draft.participants?.length
-    ? draft.participants
-    : draft.participantPetIds.map((petId) => ({
-        petId,
-        nickname: `펫 ${petId}`,
-        profileUrl: null,
-      }))
-
-  const toggle = (petId: number, checked: boolean) => {
-    onChange(
-      checked
-        ? [...selectedIds, petId]
-        : selectedIds.filter((id) => id !== petId),
-    )
-  }
-
-  return (
-    <fieldset className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4">
-      <legend className="px-1 font-medium">참여 인원</legend>
-      <div className="mb-1 flex items-center justify-between text-[13px] text-muted-foreground">
-        <span>AI가 대화에서 선별한 참여자입니다.</span>
-        <span>{selectedIds.length}명 선택</span>
-      </div>
-      {participants.map((participant) => (
-        <label
-          key={participant.petId}
-          className="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2"
-        >
-          {participant.profileUrl ? (
-            <img
-              src={participant.profileUrl}
-              alt=""
-              className="size-9 rounded-full object-cover"
-            />
-          ) : (
-            <span
-              aria-hidden="true"
-              className="flex size-9 items-center justify-center rounded-full bg-primary-subtle font-semibold text-primary-strong"
-            >
-              {participant.nickname.slice(0, 1)}
-            </span>
-          )}
-          <span className="min-w-0 flex-1 truncate font-medium">
-            {participant.nickname}
-          </span>
-          <input
-            type="checkbox"
-            checked={selectedIds.includes(participant.petId)}
-            disabled={participant.petId === draft.requestedByPetId}
-            onChange={(event) => toggle(participant.petId, event.target.checked)}
-            className="size-5 accent-primary"
-            aria-label={
-              participant.petId === draft.requestedByPetId
-                ? `${participant.nickname} (약속 제안자, 필수 참여)`
-                : participant.nickname
-            }
-          />
-        </label>
-      ))}
-      {selectedIds.length < 2 && (
-        <p role="alert" className="text-[13px] text-destructive">
-          약속에는 최소 2명의 참여자가 필요합니다.
-        </p>
-      )}
-    </fieldset>
   )
 }
 
@@ -422,15 +383,6 @@ function Notice({
         )}
       </div>
     </div>
-  )
-}
-
-function AiBadge() {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-primary-subtle px-2 py-0.5 text-[13px] font-medium text-primary-strong">
-      <Sparkle size={12} weight="fill" />
-      AI 추천
-    </span>
   )
 }
 

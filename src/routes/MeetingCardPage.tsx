@@ -6,7 +6,7 @@ import { BackLink } from '@/components/ui/BackLink'
 import { Button } from '@/components/ui/Button'
 import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
 import { cancelMeetingCard, getMeetingCard } from '@/features/meeting/api'
-import { CARD_TYPE_LABEL } from '@/features/meeting/types'
+import { MeetingCardMap } from '@/features/meeting/MeetingCardMap'
 
 export function MeetingCardPage() {
   const { cardId = '' } = useParams()
@@ -62,11 +62,32 @@ export function MeetingCardPage() {
           )}
 
           <dl className="mt-6 overflow-hidden rounded-xl border border-border bg-surface">
-            <Row
-              icon={<CalendarCheck size={18} />}
-              term="유형"
-              value={CARD_TYPE_LABEL[card.data.cardType]}
-            />
+            <div className="border-b border-border px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="shrink-0 text-muted-foreground"><CalendarCheck size={18} /></span>
+                <dt className="shrink-0 text-muted-foreground">참여 인원</dt>
+                <dd className="ml-auto font-medium">{card.data.participantCount}명</dd>
+              </div>
+              <dd className="mt-3 pl-[30px]">
+                <ul className="flex flex-wrap gap-2" aria-label="약속 참여자 목록">
+                  {(card.data.participants ?? []).map((participant) => (
+                    <li key={participant.petId} className="flex min-h-10 items-center gap-2 rounded-full border border-border bg-muted px-2.5 py-1.5">
+                      {participant.profileUrl ? (
+                        <img src={participant.profileUrl} alt="" className="size-7 rounded-full object-cover" />
+                      ) : (
+                        <span aria-hidden="true" className="grid size-7 place-items-center rounded-full bg-primary-subtle text-xs font-bold text-primary-strong">
+                          {participant.nickname.slice(0, 1)}
+                        </span>
+                      )}
+                      <span className="max-w-32 truncate text-sm font-medium">{participant.nickname}</span>
+                    </li>
+                  ))}
+                  {(card.data.participants ?? []).length === 0 && (
+                    <li className="text-sm text-muted-foreground">참여자 정보를 불러올 수 없습니다.</li>
+                  )}
+                </ul>
+              </dd>
+            </div>
             <Row
               icon={<Clock size={18} />}
               term="일시"
@@ -78,6 +99,12 @@ export function MeetingCardPage() {
               value={card.data.placeText}
             />
           </dl>
+
+          <MeetingCardMap
+            roomId={card.data.roomId}
+            routeRequestId={card.data.routeRequestId}
+            placeText={card.data.placeText}
+          />
 
           {cancel.isError && (
             <p role="alert" className="mt-4 text-[14px] text-destructive">

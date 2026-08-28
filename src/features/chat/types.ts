@@ -12,7 +12,7 @@ export type PetSearchItem = {
 
 import type { CulturalFacilityCategory } from '@/features/map/types'
 
-export type ChatMessageType = 'TEXT' | 'CARD' | 'MAP' | 'SYSTEM'
+export type ChatMessageType = 'TEXT' | 'CARD' | 'ROUTE_SHARE' | 'MAP' | 'SYSTEM'
 
 export type ChatMapFacility = {
   facilityId: number
@@ -42,6 +42,7 @@ export type ChatMessage = {
   type: ChatMessageType
   body: string | null
   map: ChatMapMessage | null
+  sharedRouteId: string | null
   meetingCardId: number | null
   clientMessageId: string | null
   createdAt: string

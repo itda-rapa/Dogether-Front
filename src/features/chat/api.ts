@@ -55,13 +55,32 @@ export function sendChatMessage(
   })
 }
 
+export function shareRouteToOpenChat(
+  roomId: number,
+  input: { routeId: string; clientMessageId: string },
+) {
+  return apiRequest<ChatMessage>(`/chat/rooms/${roomId}/route-shares`, {
+    method: 'POST',
+    body: input,
+  })
+}
+
 export function listOpenChatRooms(page = 0, size = 20) {
   const q = new URLSearchParams({ page: String(page), size: String(size) })
   return apiRequest<OpenChatRoomPage>(`/chat/rooms/open?${q.toString()}`)
 }
 
+/** 현재 Active Pet 이 실제로 참여 중인 활성 오픈채팅방만 반환한다. */
+export function listJoinedOpenChatRooms() {
+  return apiRequest<OpenChatRoom[]>('/chat/rooms/open/joined')
+}
+
 export function getOpenChatRoom(roomId: number) {
   return apiRequest<OpenChatRoom>(`/chat/rooms/open/${roomId}`)
+}
+
+export function listOpenChatParticipants(roomId: number) {
+  return apiRequest<OpenChatDraftParticipant[]>(`/chat/rooms/open/${roomId}/participants`)
 }
 
 export function createOpenChatRoom(input: {
@@ -158,6 +177,24 @@ export type OpenChatDraftRequestResult = {
 export function requestOpenChatCardDraft(roomId: number) {
   return apiRequest<OpenChatDraftRequestResult>(
     `/chat/rooms/open/${roomId}/card-drafts`,
+    { method: 'POST' },
+  )
+}
+
+export type OpenChatAiRouteAccepted = {
+  requestId: string
+  status: 'QUEUED' | 'PROCESSING'
+  routeMode: 'POINTS' | 'ROUND_TRIP'
+  activityType: 'WALK' | 'RUN' | 'CYCLE'
+  start: string
+  waypoints: string[]
+  destination: string | null
+  targetDistanceKm: number | null
+}
+
+export function requestOpenChatAiRoute(roomId: number) {
+  return apiRequest<OpenChatAiRouteAccepted>(
+    `/chat/rooms/open/${roomId}/ai-routes`,
     { method: 'POST' },
   )
 }

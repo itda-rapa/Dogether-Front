@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
-import { CalendarPlus, Clock, MapPin, Phone, UsersThree, X } from '@phosphor-icons/react'
+import { CalendarPlus, Clock, MapPin, Phone, Sparkle, UsersThree, X } from '@phosphor-icons/react'
 import { MapCanvas } from '@/features/map/MapCanvas'
 import type { MapPlace } from '@/features/map/types'
 import type { ChatMapFacility, ChatMapMessage } from './types'
@@ -123,9 +123,15 @@ export function SharedFacilityMapMessage({
 
   return (
     <section className="overflow-hidden rounded-2xl border border-primary/30 bg-surface shadow-sm" aria-label={`공유된 ${keyword} 지도`}>
-      <header className="flex items-center gap-2 px-3 py-2">
-        <MapPin size={18} weight="fill" className="text-primary-strong" />
-        <strong className="text-[14px]">공유된 {keyword} {places.length}곳</strong>
+      <header className="px-3 py-2">
+        <div className="flex items-center gap-2">
+          <MapPin size={18} weight="fill" className="text-primary-strong" />
+          <strong className="text-[14px]">공유된 {keyword} {places.length}곳</strong>
+        </div>
+        <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+          <Sparkle size={13} weight="fill" className="shrink-0 text-primary-strong" aria-hidden="true" />
+          AI가 채팅 내용을 분석해 검색한 장소 정보입니다.
+        </p>
       </header>
       <div className="relative h-64 border-y border-border bg-primary-subtle">
         <MapCanvas

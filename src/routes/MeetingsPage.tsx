@@ -5,7 +5,7 @@ import { Page } from '@/components/ui/Page'
 import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
 import { useAuth } from '@/features/auth/auth-context'
 import { listMyMeetingCards } from '@/features/meeting/api'
-import { CARD_TYPE_LABEL, type MeetingCardListItem } from '@/features/meeting/types'
+import type { MeetingCardListItem } from '@/features/meeting/types'
 import { formatMeetAt, formatParticipants } from '@/features/meeting/format'
 
 /**
@@ -119,9 +119,7 @@ function MeetingCardRow({
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 font-semibold">
           <span className="truncate">{withLabel}와의 약속</span>
-          <span className="shrink-0 rounded-full bg-primary-subtle px-2 text-[13px] font-normal text-primary-strong">
-            {CARD_TYPE_LABEL[card.cardType]}
-          </span>
+          <span className="shrink-0 rounded-full bg-primary-subtle px-2 text-[13px] font-normal text-primary-strong">{card.participantCount}명</span>
           {canceled && (
             <span className="shrink-0 rounded-full border border-border px-2 text-[13px] font-normal text-muted-foreground">
               취소됨

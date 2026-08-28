@@ -45,6 +45,8 @@ export type CreateMeetingCardBody = {
   meetAt: string
   /** Open-chat only. DIRECT chat leaves this undefined. */
   participantPetIds?: number[]
+  participantCount: number
+  routeRequestId?: string
 }
 
 /** 사용자가 확정 버튼을 눌렀을 때만 호출한다. */
