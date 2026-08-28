@@ -42,16 +42,27 @@ export function FootprintsPage() {
       )}
 
       {query.isSuccess && allItems.length === 0 && (
-        <p className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
-          아직 쌓인 발자국이 없습니다. 만남 뒤 후기를 남겨 보세요.
-        </p>
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
+          <PawPrint size={28} aria-hidden />
+          <p>아직 쌓인 발자국이 없습니다. 만남 뒤 후기를 남겨 보세요.</p>
+        </div>
       )}
 
       <ul className="flex flex-col gap-2">
-        {allItems.map((item) => (
+        {allItems.map((item, index) => (
           <li
             key={item.footprintId}
             className="flex items-center gap-3 rounded-xl border border-border bg-surface p-4"
+            /*
+              새로 리스트에 들어오는 항목만 살짝 떠오르며 나타난다. React 가 이미
+              마운트된 li(같은 key)는 다시 만들지 않으므로, "더 보기"로 이어붙인
+              새 페이지 항목만 애니메이션이 걸리고 기존 항목은 재생되지 않는다.
+              정보성 리스트라 오버슈트 없이 opacity+translateY 만 쓴다.
+            */
+            style={{
+              animation: 'dg-rise-in 0.35s ease-out both',
+              animationDelay: `${Math.min(index, 8) * 40}ms`,
+            }}
           >
             <div
               aria-hidden

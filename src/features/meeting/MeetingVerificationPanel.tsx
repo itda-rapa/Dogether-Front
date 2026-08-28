@@ -4,6 +4,7 @@ import {
   CheckCircle,
   Clock,
   MapPin,
+  PawPrint,
   Spinner,
   WarningCircle,
 } from '@phosphor-icons/react'
@@ -118,18 +119,29 @@ export function MeetingVerificationPanel({ cardId }: { cardId: number }) {
 
   if (v.confirmed) {
     return (
-      <PanelShell tone="success">
-        <div className="flex items-center gap-2 font-semibold">
-          <CheckCircle size={20} weight="fill" />
-          만남이 확인됐습니다
-        </div>
-        {v.distanceMeters != null && (
-          <p className="mt-1 text-[14px] text-muted-foreground">
-            두 위치 거리 약 {Math.round(v.distanceMeters)}m
-          </p>
-        )}
+      <>
+        <PanelShell tone="success">
+          <div className="flex items-center gap-2 font-semibold">
+            {/* 확인되는 순간에만 한 번 재생 — 반복 재생 아님. prefers-reduced-motion 은 전역에서 무효화된다. */}
+            <CheckCircle
+              size={20}
+              weight="fill"
+              style={{ animation: 'dg-pop-in 0.4s ease-out' }}
+            />
+            만남이 확인됐습니다
+          </div>
+          {v.distanceMeters != null && (
+            <p className="mt-1 text-[14px] text-muted-foreground">
+              두 위치 거리 약 {Math.round(v.distanceMeters)}m
+            </p>
+          )}
+        </PanelShell>
+        {/*
+          후기 폼은 확인 축하 카드와 별개 카드로 둔다 — 초록 성공 배지 안에 이어
+          붙이면 "확인의 순간"이 곧바로 "할 일"로 바뀌어 보인다.
+        */}
         {v.meetingId != null && <MeetingReviewForm meetingId={v.meetingId} />}
-      </PanelShell>
+      </>
     )
   }
 
@@ -472,59 +484,66 @@ function MeetingReviewForm({ meetingId }: { meetingId: number }) {
 
   if (submitted) {
     return (
-      <div className="mt-3 rounded-lg border border-border bg-background p-3">
-        <p className="text-[14px] font-medium">
-          "{submitted.placeTag}"에 후기를 남겼습니다.
+      <PanelShell tone={submitted.footprint.granted ? 'success' : 'default'}>
+        <div className="flex items-center gap-2 font-semibold">
+          <PawPrint size={20} weight="fill" />
+          "{submitted.placeTag}"에 후기를 남겼습니다
+        </div>
+        <p className="mt-1 text-[14px] text-muted-foreground">
+          {submitted.footprint.granted
+            ? '오늘의 발자국이 하나 늘었어요.'
+            : '오늘은 이미 발자국을 남겨서, 이번 후기는 발자국 없이 기록됩니다.'}
         </p>
-        {submitted.footprint.granted && (
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            오늘의 발자국이 하나 늘었어요.
-          </p>
-        )}
-      </div>
+      </PanelShell>
     )
   }
 
   return (
-    <form
-      className="mt-3 flex flex-col gap-2 border-t border-border pt-3"
-      onSubmit={(e) => {
-        e.preventDefault()
-        if (placeTag.trim() === '' || review.isPending) return
-        review.mutate()
-      }}
-    >
-      <Field label="후기 남기기">
-        {({ id, describedBy }) => (
-          <input
-            id={id}
-            aria-describedby={describedBy}
-            value={placeTag}
-            onChange={(e) => setPlaceTag(e.target.value)}
-            maxLength={30}
-            placeholder="장소 태그 (예: 한강공원)"
-            className={inputClass(false)}
-          />
+    <PanelShell>
+      <div className="flex items-center gap-2 font-semibold">
+        <PawPrint size={20} />
+        만남은 어땠나요?
+      </div>
+      <form
+        className="mt-3 flex flex-col gap-3"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (placeTag.trim() === '' || review.isPending) return
+          review.mutate()
+        }}
+      >
+        <Field label="장소">
+          {({ id, describedBy }) => (
+            <input
+              id={id}
+              aria-describedby={describedBy}
+              value={placeTag}
+              onChange={(e) => setPlaceTag(e.target.value)}
+              maxLength={30}
+              placeholder="예: 한강공원"
+              className={inputClass(false)}
+            />
+          )}
+        </Field>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          maxLength={500}
+          rows={2}
+          placeholder="한 줄 후기 (선택)"
+          aria-label="한 줄 후기"
+          className={`${inputClass(false)} min-h-0 py-2`}
+        />
+        {review.isError && (
+          <p role="alert" className="text-[13px] text-destructive">
+            {describeReviewError(review.error)}
+          </p>
         )}
-      </Field>
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        maxLength={500}
-        rows={2}
-        placeholder="한 줄 후기 (선택)"
-        aria-label="한 줄 후기"
-        className={`${inputClass(false)} min-h-0 py-2`}
-      />
-      {review.isError && (
-        <p role="alert" className="text-[13px] text-destructive">
-          {describeReviewError(review.error)}
-        </p>
-      )}
-      <Button type="submit" disabled={placeTag.trim() === '' || review.isPending}>
-        {review.isPending ? '등록 중…' : '후기 등록'}
-      </Button>
-    </form>
+        <Button type="submit" disabled={placeTag.trim() === '' || review.isPending}>
+          {review.isPending ? '등록 중…' : '후기 등록'}
+        </Button>
+      </form>
+    </PanelShell>
   )
 }
 

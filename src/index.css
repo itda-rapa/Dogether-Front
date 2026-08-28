@@ -187,6 +187,40 @@
   }
 }
 
+/* ---------------------------------------------------------------------------
+   만남 확인 성공 배지 — 확인되는 순간 한 번만 재생된다(infinite 아님).
+   MeetingVerificationPanel.tsx 하나뿐. transform/opacity만 사용.
+   --------------------------------------------------------------------------- */
+@keyframes dg-pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   리스트 카드가 순서대로 떠오르는 진입 스태거. FootprintsPage.tsx 하나뿐.
+   정보성 리스트라 back.out 오버슈트는 쓰지 않는다(design-system MASTER 참고).
+   --------------------------------------------------------------------------- */
+@keyframes dg-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* 모션은 의미 전달용으로만. 사용자가 꺼두면 전부 비활성화한다. */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChatCircleDots, Heart, HandHeart } from '@phosphor-icons/react'
+import { ChatCircleDots, Heart, HandHeart, Smiley } from '@phosphor-icons/react'
 import { useNavigate } from 'react-router'
 import { BackLink } from '@/components/ui/BackLink'
 import { ApiErrorNotice } from '@/components/ui/ApiErrorNotice'
@@ -60,8 +60,10 @@ function NotificationIcon({ type }: { type: AppNotification['type'] }) {
   switch (type) {
     case 'BOARD_POST_LIKE':
     case 'SETLOG_LIKE':
-    case 'SETLOG_CUTE':
       return <Heart {...props} weight="fill" />
+    // SetlogDetailPage 의 반응 버튼과 아이콘을 맞춘다 — CUTE 는 거기서도 Smiley 다.
+    case 'SETLOG_CUTE':
+      return <Smiley {...props} weight="fill" />
     case 'BOARD_POST_HELPFUL':
     case 'BOARD_COMMENT_HELPFUL':
       return <HandHeart {...props} weight="fill" />
